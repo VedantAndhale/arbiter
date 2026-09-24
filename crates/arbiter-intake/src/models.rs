@@ -524,7 +524,8 @@ mod tests {
         for m in catalog() {
             assert!(m.revision.len() == 40);
             for f in m.files {
-                assert!(f.sha256.len() == 64 && f.bytes < 3_000_000_000);
+                // The largest pinned model (LFM2.5 8B-A1B) is 5.2 GB.
+                assert!(f.sha256.len() == 64 && f.bytes < 6_000_000_000);
                 assert!(f.url.starts_with("https://huggingface.co/"));
                 assert!(!f.name.contains(['/', '\\']));
             }

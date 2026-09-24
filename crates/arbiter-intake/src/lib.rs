@@ -3,4 +3,5 @@
 pub mod classifier;
 pub mod models;
 pub mod questions;
-mod runtime;
+/// The embedded llama.cpp runtime (used by examples and benchmarks).
+pub mod runtime;

@@ -39,7 +39,7 @@ enum Cmd {
     Models,
     /// Download a pinned local model and run its benchmark.
     InstallModel {
-        #[arg(value_parser = ["potion", "lfm", "granite"])]
+        #[arg(value_parser = ["potion", "lfm", "granite", "qwen", "lfm-8b"])]
         model: String,
         /// Confirm that you reviewed and accept the LFM license.
         #[arg(long)]
@@ -47,7 +47,7 @@ enum Cmd {
     },
     /// Select an installed question model.
     SelectModel {
-        #[arg(value_parser = ["lfm", "granite"])]
+        #[arg(value_parser = ["lfm", "granite", "qwen", "lfm-8b"])]
         model: String,
     },
     /// Answer clarification cards using a JSON array of {question_id,text} objects.
@@ -60,7 +60,7 @@ enum Cmd {
     },
     /// Benchmark an installed local intake model (results appear in `arb models --json`).
     Bench {
-        #[arg(value_parser = ["potion", "lfm", "granite"])]
+        #[arg(value_parser = ["potion", "lfm", "granite", "qwen", "lfm-8b"])]
         model: String,
     },
     /// Resolve one pending tool request. Decisions are scoped to this run.

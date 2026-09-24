@@ -105,22 +105,23 @@ export function ModelDialog({ onClose }: { onClose: () => void }) {
   const models = useQuery({ queryKey: ["local-models"], queryFn: () => api.localModels(), refetchInterval: 2000 });
   const capability = useQuery({ queryKey: ["local-capability"], queryFn: api.localCapability });
   const setup = useQuery({ queryKey: ["setup"], queryFn: api.setup });
-  // The best fit for this whole machine: measured speed first, then CPU,
-  // memory and disk. Quality order: Granite, then LFM.
+  // The best model this computer runs comfortably. Order by quality, from
+  // measurements on Arbiter's own jobs (docs/PLAN.md, 2026-09-25): LFM2.5
+  // 8B-A1B, Qwen3.5 2B, Granite 4.1 3B, LFM2.5 1.2B. Each needs enough
+  // memory and disk, and is skipped if it measured too slow here.
   const hw = setup.data?.hardware;
   const gb = (b?: number | null) => (b ?? 0) / 2 ** 30;
   const sizeGb = (id: string) => gb(models.data?.models.find(m => m.model.id === id)?.model.files.reduce((n, f) => n + f.bytes, 0));
-  const fits = (id: string) => gb(hw?.memory_bytes) >= sizeGb(id) * 3 + 4 && gb(hw?.free_disk_bytes) >= sizeGb(id) * 2;
-  const order = ["granite", "lfm"];
-  const measured = order.map(id => models.data?.models.find(m => m.model.id === id)).filter(m => m?.benchmark);
-  const smooth = measured.find(m => m!.benchmark!.meets_target);
-  const pick = smooth?.model.id
-    ?? (measured.length ? [...measured].sort((a, b) => a!.benchmark!.complete_ms - b!.benchmark!.complete_ms)[0]!.model.id
-    : order.find(id => fits(id) && (id !== "granite" || (hw?.logical_cpus ?? 0) >= 8)) ?? "lfm");
-  const reason = smooth
-    ? `measured smooth here (${Math.round(smooth.benchmark!.complete_ms)} ms)`
-    : measured.length ? "fastest measured here; none met the speed target"
-    : `likely smooth on ${hw?.logical_cpus ?? "?"} threads and ${Math.round(gb(hw?.memory_bytes))} GB · run the benchmark to confirm`;
+  const minMemory: Record<string, number> = { "lfm-8b": 32, qwen: 8, granite: 12, lfm: 0 };
+  const order = ["lfm-8b", "qwen", "granite", "lfm"];
+  const row = (id: string) => models.data?.models.find(m => m.model.id === id);
+  const tooSlow = (id: string) => (row(id)?.benchmark?.complete_ms ?? 0) > 12_000;
+  const fits = (id: string) => gb(hw?.memory_bytes) >= (minMemory[id] ?? 8) && gb(hw?.free_disk_bytes) >= sizeGb(id) * 2 && !tooSlow(id);
+  const pick = order.find(id => row(id) && fits(id)) ?? "lfm";
+  const measuredPick = row(pick)?.benchmark;
+  const reason = measuredPick
+    ? `best fit for this computer (questions in ${(measuredPick.complete_ms / 1000).toFixed(1)} s here)`
+    : `best fit for ${Math.round(gb(hw?.memory_bytes))} GB of memory · run the benchmark to confirm`;
   const why = (id: string) => id === "potion" ? "Needed: sorts tasks instantly" : id === pick ? `Recommended: ${reason}` : null;
   const check = useMutation({ mutationFn: api.checkLocalCapability, onSettled: () => qc.invalidateQueries({ queryKey: ["local-capability"] }) });
   const action = useMutation({ mutationFn: ({ id, op }: { id: string; op: "install" | "benchmark" | "select" }) => op === "install" ? api.installModel(id, license) : op === "benchmark" ? api.benchmarkModel(id) : api.selectLocalModel(id), onSuccess: () => qc.invalidateQueries({ queryKey: ["local-models"] }) });
@@ -134,7 +135,7 @@ export function ModelDialog({ onClose }: { onClose: () => void }) {
       return <section key={m.id} className="rounded-lg border border-line p-3">
         <h3 className="flex flex-wrap items-center gap-2 font-medium">{m.name}{models.data?.selected === m.id && <span className="text-[12px] text-dim">Selected</span>}{why(m.id) && <span className={`rounded-full px-2 py-0.5 text-[11px] font-normal ${m.id === "potion" ? "bg-raised text-dim" : "bg-accent/15 text-accent"}`}>{m.id === "potion" ? "" : "★ "}{why(m.id)}</span>}</h3>
         <p className="text-[12px] text-dim">{Math.round(m.files.reduce((n,f) => n+f.bytes, 0)/1_000_000)} MB · {m.license}</p>
-        {m.id === "lfm" && !ready && <label className="my-2 flex items-start gap-2 text-[12px]"><input type="checkbox" checked={license} onChange={e => setLicense(e.target.checked)} /><span>I have reviewed and can use the <a className="text-accent underline" href={`https://huggingface.co/${m.repository}/blob/main/LICENSE`} target="_blank" rel="noreferrer">LFM license</a>.</span></label>}
+        {m.license === "lfm1.0" && !ready && <label className="my-2 flex items-start gap-2 text-[12px]"><input type="checkbox" checked={license} onChange={e => setLicense(e.target.checked)} /><span>I have reviewed and can use the <a className="text-accent underline" href={`https://huggingface.co/${m.repository}/blob/main/LICENSE`} target="_blank" rel="noreferrer">LFM license</a>.</span></label>}
         {progress?.phase === "downloading" && <div className="my-2" role="status"><progress aria-label={`${m.name} download`} className="w-full" max={progress.total || 1} value={progress.downloaded} /><p className="text-[12px] text-dim">{Math.round(progress.downloaded/1_000_000)} / {Math.round(progress.total/1_000_000)} MB</p></div>}
         {progress?.phase === "benchmarking" && <p role="status" className="my-2 text-dim">Benchmarking on this computer…</p>}
         {progress?.phase === "downloading" && <Button disabled={cancel.isPending} onClick={()=>cancel.mutate(m.id)}>Cancel download</Button>}
@@ -143,7 +144,7 @@ export function ModelDialog({ onClose }: { onClose: () => void }) {
           ? `Fast enough for questions on this computer (${seconds(benchmark.complete_ms)}).`
           : `Too slow for questions before each task (${seconds(benchmark.complete_ms)}; under ${seconds(benchmark.target_ms)} is needed). It is still used for reviews, research and commit messages, which run in the background.`}</p>}
         {progress?.error && <p role="alert" className="my-2 text-[12px] text-bad">{progress.error}</p>}
-        <div className="mt-2 flex flex-wrap gap-2"><Button disabled={busy || action.isPending || (!ready && m.id === "lfm" && !license)} onClick={() => action.mutate({ id: m.id, op: ready ? "benchmark" : "install" })}>{busy ? "Working…" : ready ? "Run benchmark" : "Download and set up"}</Button>
+        <div className="mt-2 flex flex-wrap gap-2"><Button disabled={busy || action.isPending || (!ready && m.license === "lfm1.0" && !license)} onClick={() => action.mutate({ id: m.id, op: ready ? "benchmark" : "install" })}>{busy ? "Working…" : ready ? "Run benchmark" : "Download and set up"}</Button>
           {ready && m.id !== "potion" && models.data?.selected !== m.id && <Button disabled={busy || action.isPending} onClick={() => action.mutate({ id: m.id, op: "select" })}>Use for questions</Button>}
           {ready && m.id !== "potion" && <Button disabled={busy || check.isPending} onClick={() => check.mutate(m.id)}>{check.isPending && check.variables === m.id ? "Checking coding…" : "Check coding ability"}</Button>}</div>
         {ready && m.id !== "potion" && <CodingResult result={capability.data?.results.find(r => r.model === m.id)} />}

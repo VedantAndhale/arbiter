@@ -8,6 +8,8 @@ MODELS = [
     ("potion", "Potion base 32M", "minishlab/potion-base-32M", "mit", ["config.json", "tokenizer.json", "model.safetensors"]),
     ("lfm", "LFM 2.5 1.2B Instruct", "LiquidAI/LFM2.5-1.2B-Instruct-GGUF", "lfm1.0", ["LFM2.5-1.2B-Instruct-Q4_K_M.gguf"]),
     ("granite", "Granite 4.1 3B", "ibm-granite/granite-4.1-3b-GGUF", "apache-2.0", ["granite-4.1-3b-Q4_K_M.gguf"]),
+    ("qwen", "Qwen3.5 2B", "unsloth/Qwen3.5-2B-GGUF", "apache-2.0", ["Qwen3.5-2B-Q4_K_M.gguf"]),
+    ("lfm-8b", "LFM2.5 8B-A1B", "LiquidAI/LFM2.5-8B-A1B-GGUF", "lfm1.0", ["LFM2.5-8B-A1B-Q4_K_M.gguf"]),
 ]
 
 catalog = []

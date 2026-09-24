@@ -421,6 +421,20 @@ Status: G0–G6 are implemented. Templates were dropped in favour of a single "A
 
 For comparison, Google lists Gemma 4 E2B on a Galaxy S26 Ultra GPU at 3,808 read and 52 written, and on an Intel Lunar Lake GPU at 3,751 and 48. Phones feel fast because of newer AI hardware and because chat streams words as they arrive.
 
+**Model head-to-head (same laptop, embedded runtime, 10 real task descriptions, compact questions with one worked example).**
+
+| Model | File | Peak memory | Questions (avg / worst) | Quality | Commit message |
+|---|---|---|---|---|---|
+| Qwen3.5 0.8B | 0.53 GB | - | failed (runaway output) | - | - |
+| LFM2.5 1.2B | 0.73 GB | ~1 GB | 3.1 s / 3.5 s | usable; headers weak | weak |
+| **Qwen3.5 2B** (Apache-2.0) | 1.28 GB | ~1.5 GB | 6.7 s / 8.0 s | very good | good (7 s) |
+| LFM2.5 8B-A1B (MoE, 1B active) | 5.16 GB | 8.5 GB | 6.1 s / 7.1 s | best | poor (19 s) |
+| Granite 4.1 3B | 2.10 GB | ~2.3 GB | 8.1 s / 9.5 s | good, wordy | wrong style |
+
+- **Recommendation order:** LFM2.5 8B-A1B (32 GB or more of memory), Qwen3.5 2B (8 GB or more), Granite, LFM2.5 1.2B. A model measured slower than 12 s here is skipped.
+- **English-only characters:** for an English task, the question format allows only printable ASCII, which stopped small models drifting into other scripts. Other languages are unrestricted.
+- **Duplicates:** repeated questions are dropped.
+
 **Order of work.**
 1. **Write less.** **Done:** the question writer now asks 1–2 questions as `{header, question}`, and the runtime adds the fixed fields. Granite went from 34.4 s to 6.8 s on the laptop above.
 2. **Stream the first question.** Show each question as soon as its JSON object closes, instead of after the whole reply.
