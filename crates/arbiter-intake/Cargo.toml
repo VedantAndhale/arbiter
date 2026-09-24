@@ -1,0 +1,25 @@
+[package]
+name = "arbiter-intake"
+description = "Local intake classification, clarification and verified model management"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+arbiter-core.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+reqwest.workspace = true
+tokio.workspace = true
+model2vec-rs = { version = "0.2.1", default-features = false, features = ["local-only"] }
+# Enable inference regex without model2vec's tokenizer-training C++ feature.
+tokenizers = { version = "0.21", default-features = false, features = ["fancy-regex"] }
+llama-cpp-2 = { version = "=0.1.157", default-features = false, features = ["llguidance"] }
+encoding_rs = "0.8"
+llguidance = "1.8"
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -1,0 +1,22 @@
+[package]
+name = "arbiter-browser"
+description = "Minimal Chrome DevTools Protocol client, dev-server manager and page checks for Arbiter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+arbiter-supervisor.workspace = true
+anyhow.workspace = true
+futures-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+tracing.workspace = true
+which = "8"
+tempfile.workspace = true
+
+[dev-dependencies]
+image.workspace = true
+axum.workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "arbiter-store"
+description = "SQLite append-only event log and projections for Arbiter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+arbiter-core.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+time.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

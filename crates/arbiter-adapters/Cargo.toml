@@ -1,0 +1,17 @@
+[package]
+name = "arbiter-adapters"
+description = "Harness adapters (Claude Code, Codex) that normalize agent streams for Arbiter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+arbiter-setup.workspace = true
+arbiter-core.workspace = true
+arbiter-supervisor.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+which = "8"

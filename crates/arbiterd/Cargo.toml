@@ -1,0 +1,57 @@
+[package]
+name = "arbiterd"
+description = "Arbiter daemon: local HTTP/WebSocket API over the event log and supervisor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "arbiterd"
+path = "src/main.rs"
+
+[[example]]
+name = "phase_c_preview"
+path = "examples/b2_preview.rs"
+
+[[example]]
+name = "phase_e_preview"
+path = "examples/phase_e_preview.rs"
+
+[dependencies]
+regex.workspace = true
+arbiter-core.workspace = true
+arbiter-adapters.workspace = true
+arbiter-heal.workspace = true
+arbiter-browser.workspace = true
+arbiter-intake.workspace = true
+arbiter-plan.workspace = true
+arbiter-brief.workspace = true
+arbiter-vault.workspace = true
+arbiter-setup.workspace = true
+arbiter-project.workspace = true
+arbiter-local.workspace = true
+reqwest.workspace = true
+image.workspace = true
+sha2.workspace = true
+pdf-extract.workspace = true
+zip = { version = "2.4", default-features = false, features = ["deflate"] }
+quick-xml = "0.42"
+time.workspace = true
+arbiter-store.workspace = true
+arbiter-supervisor.workspace = true
+anyhow.workspace = true
+axum.workspace = true
+clap.workspace = true
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tower-http.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

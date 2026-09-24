@@ -1,0 +1,14 @@
+[package]
+name = "arbiter-core"
+description = "Domain types and event schema for Arbiter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+time.workspace = true
+dirs.workspace = true
+anyhow.workspace = true

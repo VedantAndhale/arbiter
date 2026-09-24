@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arbiter · Coding agents that finish the job</title>
+<meta name="description" content="Arbiter plans your request, runs Claude Code and Codex in parallel, checks and repairs their work, and lands it as one clean commit. Free and open source.">
+<meta property="og:title" content="Arbiter · Coding agents that finish the job">
+<meta property="og:description" content="Plan, run in parallel, self-heal, publish one clean commit. With your own subscriptions. Free and open source.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0b0d12">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+  :root {
+    --bg: #0b0d12; --bg2: #10131a; --panel: #141821; --line: #232937; --line2: #2e3647;
+    --fg: #e8ebf2; --dim: #9aa3b5; --faint: #6b7489;
+    --accent: #7c9cff; --accent2: #a78bfa; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171;
+    --radius: 14px; --max: 1120px;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+  .glow { position: absolute; inset: -20% -10% auto; height: 820px; pointer-events: none; z-index: 0;
+    background: radial-gradient(40% 50% at 30% 20%, rgba(124,156,255,.22), transparent 70%), radial-gradient(35% 45% at 75% 10%, rgba(167,139,250,.18), transparent 70%); filter: blur(10px); }
+  .grid-bg { position: absolute; inset: 0; height: 900px; z-index: 0; pointer-events: none; opacity: .35;
+    background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 56px 56px; mask-image: radial-gradient(60% 60% at 50% 20%, #000 30%, transparent 75%); -webkit-mask-image: radial-gradient(60% 60% at 50% 20%, #000 30%, transparent 75%); }
+
+  /* nav */
+  nav { position: sticky; top: 0; z-index: 20; backdrop-filter: saturate(140%) blur(12px); background: rgba(11,13,18,.72); border-bottom: 1px solid transparent; transition: border-color .2s; }
+  nav.scrolled { border-bottom-color: var(--line); }
+  nav .wrap { display: flex; align-items: center; gap: 24px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; letter-spacing: -.01em; }
+  .brand svg { width: 26px; height: 26px; }
+  .links { display: flex; gap: 22px; margin-left: 8px; color: var(--dim); font-size: 14px; }
+  .links a:hover { color: var(--fg); }
+  .spacer { flex: 1; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: 10px; font-weight: 560; font-size: 14px; border: 1px solid var(--line2); background: var(--panel); color: var(--fg); transition: transform .12s, background .2s, border-color .2s; white-space: nowrap; }
+  .btn:hover { border-color: #3b455c; background: #19202c; transform: translateY(-1px); }
+  .btn.primary { border: 0; color: #0b0d12; background: linear-gradient(135deg, #a9bcff, #7c9cff 45%, #a78bfa); box-shadow: 0 8px 30px -10px rgba(124,156,255,.6); }
+  .btn.primary:hover { filter: brightness(1.06); }
+  .btn.lg { height: 48px; padding: 0 22px; font-size: 15px; border-radius: 12px; }
+  .btn svg { width: 16px; height: 16px; }
+
+  /* hero */
+  header.hero { position: relative; overflow: hidden; padding: 88px 0 40px; }
+  .hero .wrap { position: relative; z-index: 1; text-align: center; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--line2); border-radius: 999px; font-size: 13px; color: var(--dim); background: rgba(20,24,33,.7); }
+  .pill b { color: var(--fg); font-weight: 560; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+  h1 { font-size: clamp(40px, 6.4vw, 76px); line-height: 1.02; letter-spacing: -.035em; margin: 22px auto 18px; max-width: 900px; font-weight: 700; }
+  h1 .grad { background: linear-gradient(120deg, #fff 10%, #b9c7ff 45%, #c4b5fd 80%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lede { font-size: clamp(17px, 2vw, 20px); color: var(--dim); max-width: 700px; margin: 0 auto; }
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 32px; }
+  .fine { margin-top: 14px; font-size: 13px; color: var(--faint); }
+  .works { margin-top: 26px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; font-size: 13px; color: var(--dim); }
+  .works span { padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(16,19,26,.8); }
+
+  /* app mock */
+  .mock { position: relative; z-index: 1; margin: 56px auto 0; max-width: 1040px; border: 1px solid var(--line2); border-radius: 16px; background: var(--bg2); box-shadow: 0 40px 120px -40px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.02) inset; overflow: hidden; text-align: left; }
+  .mock .bar { height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-bottom: 1px solid var(--line); background: #0f121a; }
+  .mock .bar i { width: 11px; height: 11px; border-radius: 50%; background: #2b3244; display: block; }
+  .mock .bar .t { margin-left: 10px; font-size: 12px; color: var(--faint); }
+  .mock .body { display: grid; grid-template-columns: 220px 1fr 300px; min-height: 420px; }
+  .side { border-right: 1px solid var(--line); padding: 14px 10px; font-size: 13px; color: var(--dim); }
+  .side h6 { margin: 12px 8px 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+  .side div { padding: 6px 8px; border-radius: 8px; display: flex; align-items: center; gap: 8px; }
+  .side div.on { background: #1a2030; color: var(--fg); }
+  .st { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .main { padding: 20px 24px; }
+  .main .k { font-size: 12px; color: var(--faint); }
+  .main h3 { margin: 4px 0 14px; font-size: 18px; letter-spacing: -.01em; }
+  .steps { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .step { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-top: 1px solid var(--line); font-size: 14px; }
+  .step:first-child { border-top: 0; }
+  .step .ic { width: 18px; text-align: center; font-weight: 700; }
+  .step .n { flex: 1; }
+  .step .n small { display: block; color: var(--faint); font-size: 12px; }
+  .tag { font-size: 11px; padding: 2px 7px; border-radius: 6px; background: #1b2231; color: var(--dim); font-family: var(--mono); }
+  .tag.p { background: rgba(167,139,250,.12); color: #c4b5fd; }
+  .progress { height: 4px; background: #1a1f2b; border-radius: 4px; margin: 14px 0 6px; overflow: hidden; }
+  .progress b { display: block; height: 100%; width: 62%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 4px; animation: grow 3.4s ease-in-out infinite alternate; }
+  @keyframes grow { from { width: 48% } to { width: 74% } }
+  .pulse { animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .35 } }
+  .aside { border-left: 1px solid var(--line); padding: 16px; font-family: var(--mono); font-size: 12px; line-height: 1.7; color: var(--dim); background: #0e1118; }
+  .aside .h { font-family: var(--sans); font-size: 12px; color: var(--faint); margin-bottom: 8px; }
+  .add { color: #86efac; } .del { color: #fca5a5; } .hunk { color: #93c5fd; }
+  .card-ok { margin-top: 14px; font-family: var(--sans); border: 1px solid rgba(74,222,128,.25); background: rgba(74,222,128,.06); border-radius: 10px; padding: 10px 12px; color: var(--fg); font-size: 13px; }
+  .card-ok small { display: block; color: var(--dim); }
+
+  /* sections */
+  section { padding: 96px 0; position: relative; }
+  .eyebrow { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+  h2 { font-size: clamp(30px, 4vw, 46px); letter-spacing: -.03em; line-height: 1.08; margin: 10px 0 14px; max-width: 760px; }
+  .sub { color: var(--dim); max-width: 660px; font-size: 18px; margin: 0; }
+  .flow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; counter-reset: s; }
+  .flow > div { position: relative; padding: 26px; border: 1px solid var(--line); border-radius: var(--radius); background: linear-gradient(180deg, var(--panel), var(--bg2)); }
+  .flow > div::before { counter-increment: s; content: "0" counter(s); font-family: var(--mono); font-size: 13px; color: var(--accent); }
+  .flow h4 { margin: 10px 0 6px; font-size: 19px; letter-spacing: -.01em; }
+  .flow p { margin: 0; color: var(--dim); font-size: 15px; }
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin-top: 44px; background: var(--line); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+  .feature { padding: 28px; background: var(--bg); transition: background .2s; }
+  .feature:hover { background: #0f1219; }
+  .feature .i { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 10px; background: #161b27; border: 1px solid var(--line2); margin-bottom: 16px; }
+  .feature .i svg { width: 18px; height: 18px; stroke: var(--accent); }
+  .feature h4 { margin: 0 0 6px; font-size: 17px; letter-spacing: -.01em; }
+  .feature p { margin: 0; color: var(--dim); font-size: 15px; }
+  .split { display: grid; grid-template-columns: 1.05fr 1fr; gap: 48px; align-items: center; }
+  .list { list-style: none; padding: 0; margin: 26px 0 0; display: grid; gap: 14px; }
+  .list li { display: flex; gap: 12px; color: var(--dim); }
+  .list li b { color: var(--fg); font-weight: 600; }
+  .check { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: rgba(74,222,128,.12); color: var(--ok); font-size: 13px; margin-top: 2px; }
+  .term { border: 1px solid var(--line2); border-radius: 14px; background: #0c0f15; font-family: var(--mono); font-size: 13px; line-height: 1.8; padding: 18px 20px; color: var(--dim); box-shadow: 0 30px 80px -40px rgba(0,0,0,.9); }
+  .term .p { color: var(--accent); }
+  .term .c { color: var(--faint); }
+  .term .o { color: var(--fg); }
+  .who { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; }
+  .who > div { padding: 24px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--bg2); }
+  .who h4 { margin: 0 0 6px; font-size: 17px; }
+  .who p { margin: 0; color: var(--dim); font-size: 15px; }
+  .oss { border: 1px solid var(--line2); border-radius: 20px; padding: 44px; background: radial-gradient(60% 120% at 100% 0%, rgba(124,156,255,.12), transparent 60%), var(--bg2); display: grid; grid-template-columns: 1.3fr 1fr; gap: 36px; align-items: center; }
+  .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .stat { border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: var(--bg); }
+  .stat b { display: block; font-size: 22px; letter-spacing: -.02em; }
+  .stat span { color: var(--dim); font-size: 13px; }
+  details { border-top: 1px solid var(--line); padding: 18px 0; }
+  details:last-child { border-bottom: 1px solid var(--line); }
+  summary { cursor: pointer; font-weight: 580; font-size: 17px; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; color: var(--faint); font-weight: 400; font-size: 22px; line-height: 1; transition: transform .2s; }
+  details[open] summary::after { transform: rotate(45deg); }
+  details p { color: var(--dim); margin: 10px 0 0; max-width: 780px; }
+  .final { text-align: center; padding: 110px 0; }
+  .final h2 { margin-left: auto; margin-right: auto; }
+  footer { border-top: 1px solid var(--line); padding: 36px 0 48px; color: var(--faint); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: center; }
+  footer a:hover { color: var(--fg); }
+  .reveal { opacity: 0; transform: translateY(14px); transition: opacity .7s ease, transform .7s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } .progress b, .pulse { animation: none; } html { scroll-behavior: auto; } }
+  @media (max-width: 980px) {
+    .mock .body { grid-template-columns: 1fr; } .side, .aside { display: none; }
+    .flow, .features, .who { grid-template-columns: 1fr 1fr; } .split, .oss { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px) {
+    .links { display: none; } .flow, .features, .who { grid-template-columns: 1fr; }
+    header.hero { padding-top: 56px; } section { padding: 72px 0; } .oss { padding: 28px; }
+    nav .btn.gh span { display: none; }
+  }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 8px; }
+</style>
+</head>
+<body>
+<nav id="nav">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Arbiter home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a9bcff"/><stop offset="1" stop-color="#a78bfa"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="#141821"/><path d="M8 9c5 0 6 7 8 7M8 16h8M8 23c5 0 6-7 8-7M16 16h8" stroke="url(#lg)" stroke-width="2.4" fill="none" stroke-linecap="round"/><circle cx="24.5" cy="16" r="2.6" fill="url(#lg)"/></svg>
+      Arbiter
+    </a>
+    <div class="links"><a href="#how">How it works</a><a href="#features">Features</a><a href="#privacy">Privacy</a><a href="#faq">FAQ</a></div>
+    <span class="spacer"></span>
+    <a class="btn gh" href="https://github.com/VedantAndhale/arbiter" aria-label="Arbiter on GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span>GitHub</span></a>
+    <a class="btn primary" href="https://github.com/VedantAndhale/arbiter/releases/latest" data-download>Download</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="grid-bg"></div><div class="glow"></div>
+  <div class="wrap">
+    <span class="pill"><span class="dot"></span><b>Free and open source</b> · <span data-version>Windows · early access</span></span>
+    <h1><span class="grad">Coding agents that finish the job.</span></h1>
+    <p class="lede">Describe what you want. Arbiter plans it, runs Claude Code and Codex in parallel, checks and repairs their work, and hands you one clean commit, using your own subscriptions and as few tokens as possible.</p>
+    <div class="cta">
+      <a class="btn primary lg" href="https://github.com/VedantAndhale/arbiter/releases/latest" data-download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 21h16"/></svg><span data-download-label>Download for Windows</span></a>
+      <a class="btn lg" href="https://github.com/VedantAndhale/arbiter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg>View the source</a>
+    </div>
+    <p class="fine">Installs per user, no admin rights needed. Updates itself. macOS and Linux are coming.</p>
+    <div class="works"><span>Works with Claude Code</span><span>Codex</span><span>Local models</span><span>Any Git repository</span></div>
+
+    <div class="mock reveal" role="img" aria-label="The Arbiter app: a plan with parallel steps, their checks, and a clean commit ready to publish">
+      <div class="bar"><i></i><i></i><i></i><span class="t">Arbiter · Orders dashboard</span></div>
+      <div class="body">
+        <div class="side">
+          <h6>Projects</h6>
+          <div class="on"><span class="st" style="background:var(--accent)"></span>shop-app</div>
+          <div><span class="st" style="background:var(--faint)"></span>data-pipeline</div>
+          <h6>Tasks</h6>
+          <div class="on"><span class="st pulse" style="background:var(--accent)"></span>Orders dashboard</div>
+          <div><span class="st" style="background:var(--ok)"></span>Fix checkout rounding</div>
+          <div><span class="st" style="background:var(--warn)"></span>Dark mode · needs you</div>
+        </div>
+        <div class="main">
+          <div class="k">Working on it · 2 of 4 done</div>
+          <h3>Export orders and chart them in the app</h3>
+          <div class="steps">
+            <div class="step"><span class="ic" style="color:var(--ok)">✓</span><span class="n">Export orders as JSON<small>Checks passed · handed over the schema</small></span><span class="tag p">data-pipeline</span></div>
+            <div class="step"><span class="ic" style="color:var(--ok)">✓</span><span class="n">Orders API endpoint<small>Healed one failing test · merged</small></span><span class="tag">shop-app</span></div>
+            <div class="step"><span class="ic pulse" style="color:var(--accent)">●</span><span class="n">Chart on the dashboard<small>Agent is working · Claude Code</small></span><span class="tag">shop-app</span></div>
+            <div class="step"><span class="ic" style="color:var(--faint)">○</span><span class="n">End-to-end check<small>Starts after step 3</small></span><span class="tag">shop-app</span></div>
+          </div>
+          <div class="progress"><b></b></div>
+          <div class="k">Each step works in its own copy. Nothing touches your checkout until you publish.</div>
+        </div>
+        <div class="aside">
+          <div class="h">What changed</div>
+          <div class="hunk">@@ src/orders/chart.tsx</div>
+          <div class="add">+ export function OrdersChart() {</div>
+          <div class="add">+   const orders = useOrders();</div>
+          <div class="add">+   return &lt;Line data={orders} /&gt;;</div>
+          <div class="add">+ }</div>
+          <div class="del">- // TODO: chart</div>
+          <div class="card-ok">Ready to publish<small>feat(orders): chart daily revenue · 1 commit</small></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="how">
+  <div class="wrap">
+    <div class="eyebrow reveal">How it works</div>
+    <h2 class="reveal">From one sentence to one clean commit.</h2>
+    <p class="sub reveal">Arbiter asks only the questions that matter, then does the tedious parts itself.</p>
+    <div class="flow">
+      <div class="reveal"><h4>Describe the outcome</h4><p>Type what you want and @ the projects involved. A local model sizes the work and asks a clarifying question only when a choice is really yours.</p></div>
+      <div class="reveal"><h4>Agents work in parallel</h4><p>Bigger jobs become a plan you approve. Steps run side by side in isolated worktrees, hand their interfaces to each other, and heal their own failing checks.</p></div>
+      <div class="reveal"><h4>Review, then publish</h4><p>See your app running, read the diff and leave comments. Publish as one commit with a written message, as a draft pull request or to a local branch.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="features" style="padding-top:24px">
+  <div class="wrap">
+    <div class="eyebrow reveal">Features</div>
+    <h2 class="reveal">Everything around the agent, handled.</h2>
+    <div class="features reveal">
+      <div class="feature"><div class="i"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M4 12h16M4 18h7"/></svg></div><h4>Plans with dependencies</h4><p>Steps, scopes and acceptance checks you can edit before anything runs. Steps that depend on others simply wait.</p></div>
+      <div class="feature"><div class="i"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M20 12a8 8 0 11-3-6.2M20 4v5h-5"/></svg></div><h4>Self-healing runs</h4><p>Crashes, stalls and rate limits are resumed or rerouted. Failing tests come back to the agent as short excerpts, never raw logs.</p></div>
+      <div class="feature"><div class="i"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg></div><h4>Token discipline</h4><p>Deterministic fixes first. A local model handles triage, reviews, research and commit messages, so frontier agents get only what they need.</p></div>
+      <div class="feature"><div class="i"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8"/></svg></div><h4>See your app</h4><p>The app starts by itself after a change. Point at an element in the preview and ask for a change right there.</p></div>
+      <div class="feature"><div class="i"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M6 3v12M18 9v12M6 15a3 3 0 100 6 3 3 0 000-6zM18 3a3 3 0 100 6 3 3 0 000-6zM6 15c0-4 12-2 12-6"/></svg></div><h4>Across repositories</h4><p>One feature can span a data pipeline and the app that reads it. Each project gets its own branch and its own commit.</p></div>
+      <div class="feature"><div class="i"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M4 17l6-6-6-6M12 19h8"/></svg></div><h4>Terminal and editor</h4><p>A real terminal in each task's copy and a code editor for quick fixes. Open them with Ctrl+J.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="privacy">
+  <div class="wrap split">
+    <div>
+      <div class="eyebrow reveal">Privacy</div>
+      <h2 class="reveal">Your code, your subscriptions, your memory.</h2>
+      <p class="sub reveal">Arbiter runs on your computer and talks only to the coding tools you signed in to.</p>
+      <ul class="list reveal">
+        <li><span class="check">✓</span><span><b>No token proxy.</b> You sign in to Claude Code or Codex yourself. Paid usage stays off unless you turn it on.</span></li>
+        <li><span class="check">✓</span><span><b>Nothing spills into shared repos.</b> Notes, guidance and history live in your own private memory repository.</span></li>
+        <li><span class="check">✓</span><span><b>Local research.</b> Web lookups run on your machine. Anything from a signed-in site is checked locally before an agent sees it.</span></li>
+        <li><span class="check">✓</span><span><b>You approve every push.</b> Arbiter's working branches never leave your computer, and it never force-pushes.</span></li>
+      </ul>
+    </div>
+    <div class="term reveal" aria-label="Example of what publishing produces">
+      <div class="c"># what lands on your remote</div>
+      <div><span class="p">$</span> <span class="o">git log --oneline main..feature/orders-chart</span></div>
+      <div class="o">3f9c2e1 feat(orders): chart daily revenue</div>
+      <div>&nbsp;</div>
+      <div><span class="p">$</span> <span class="o">git branch -r | grep arbiter</span></div>
+      <div class="c"># (nothing: working branches stay local)</div>
+      <div>&nbsp;</div>
+      <div class="c"># memory, kept apart from projects</div>
+      <div class="o">~/.arbiter/memory/</div>
+      <div>├─ guidance/about-me.md</div>
+      <div>├─ projects/shop-app/notes/</div>
+      <div>└─ backup/events/2026-09.jsonl</div>
+    </div>
+  </div>
+</section>
+
+<section id="who" style="padding-top:24px">
+  <div class="wrap">
+    <div class="eyebrow reveal">Who it's for</div>
+    <h2 class="reveal">Fast for experts. Clear for everyone else.</h2>
+    <div class="who">
+      <div class="reveal"><h4>Developers</h4><p>Parallel agents, real diffs, line comments, a terminal and an editor, with no babysitting.</p></div>
+      <div class="reveal"><h4>New developers</h4><p>Plain-language progress, checks that fix themselves, and your app running where you can see it.</p></div>
+      <div class="reveal"><h4>Founders</h4><p>Describe the product. Arbiter sets up tools, asks what matters, and keeps your work safe.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="oss">
+  <div class="wrap">
+    <div class="oss reveal">
+      <div>
+        <div class="eyebrow">Open source</div>
+        <h2 style="margin-bottom:10px">MIT licensed. Built in the open.</h2>
+        <p class="sub">A Rust background service and a Tauri desktop app. Read the code, file an issue, or build it yourself.</p>
+        <div class="cta" style="justify-content:flex-start"><a class="btn primary" href="https://github.com/VedantAndhale/arbiter">Star on GitHub</a><a class="btn" href="https://github.com/VedantAndhale/arbiter/blob/main/CONTRIBUTING.md">Contribute</a></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><b>Rust</b><span>daemon and supervisor</span></div>
+        <div class="stat"><b>Tauri 2</b><span>desktop app</span></div>
+        <div class="stat"><b data-stars>MIT</b><span data-stars-label>license</span></div>
+        <div class="stat"><b>127.0.0.1</b><span>local only, token-guarded</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="faq" style="padding-top:24px">
+  <div class="wrap">
+    <div class="eyebrow reveal">FAQ</div>
+    <h2 class="reveal">Questions</h2>
+    <div class="reveal">
+      <details><summary>Is Arbiter free?</summary><p>Yes. Arbiter is free and open source under the MIT license. You use your own Claude Code or Codex subscription; Arbiter adds no fees and never resells tokens.</p></details>
+      <details><summary>Which agents does it work with?</summary><p>Claude Code and Codex, installed and signed in on your computer, plus local models for smaller jobs such as triage, reviews, research and commit messages.</p></details>
+      <details><summary>Which platforms are supported?</summary><p>Windows today. macOS and Linux build from the same code and will get installers soon.</p></details>
+      <details><summary>Will it change my repository behind my back?</summary><p>No. Every task works in its own copy on an Arbiter branch that stays on your computer. Your checkout changes only when you commit or publish, and every push asks first.</p></details>
+      <details><summary>How do updates work?</summary><p>Arbiter checks for new releases, downloads them in the background and installs them when you close it, or right away from the banner. Every update is verified against a signing key built into the app.</p></details>
+      <details><summary>Windows warns me when I run the installer. Why?</summary><p>Early builds are not code-signed yet, so SmartScreen does not recognise them. Choose More info, then Run anyway. You can also build the app from source.</p></details>
+    </div>
+  </div>
+</section>
+
+<section class="final">
+  <div class="wrap">
+    <h2 class="reveal">Hand off the work. Keep the control.</h2>
+    <p class="sub reveal" style="margin:0 auto">Free, open source, and running on your machine in a couple of minutes.</p>
+    <div class="cta reveal"><a class="btn primary lg" href="https://github.com/VedantAndhale/arbiter/releases/latest" data-download><span data-download-label>Download for Windows</span></a><a class="btn lg" href="https://github.com/VedantAndhale/arbiter">View the source</a></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>© <span id="year">2026</span> Vedant Andhale · MIT License</span>
+    <span class="spacer"></span>
+    <a href="https://github.com/VedantAndhale/arbiter">GitHub</a>
+    <a href="https://github.com/VedantAndhale/arbiter/releases">Releases</a>
+    <a href="https://github.com/VedantAndhale/arbiter/blob/main/SECURITY.md">Security</a>
+    <a href="https://github.com/VedantAndhale/arbiter/blob/main/LICENSE">License</a>
+  </div>
+  <div class="wrap" style="margin-top:10px;font-size:12px">Claude Code and Codex are trademarks of their respective owners. Arbiter is an independent project and is not affiliated with them.</div>
+</footer>
+
+<script>
+  // Sticky nav border, reveal on scroll, and the newest installer link.
+  const nav = document.getElementById('nav');
+  addEventListener('scroll', () => nav.classList.toggle('scrolled', scrollY > 8), { passive: true });
+  document.getElementById('year').textContent = new Date().getFullYear();
+  const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px' }) : null;
+  document.querySelectorAll('.reveal').forEach(el => io ? io.observe(el) : el.classList.add('in'));
+  fetch('https://api.github.com/repos/VedantAndhale/arbiter/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
+    .then(r => r.ok ? r.json() : null)
+    .then(rel => {
+      if (!rel) return;
+      const exe = (rel.assets || []).find(a => /setup\.exe$/i.test(a.name) || /\.exe$/i.test(a.name));
+      if (exe) document.querySelectorAll('[data-download]').forEach(a => a.href = exe.browser_download_url);
+      document.querySelectorAll('[data-version]').forEach(s => s.textContent = `${rel.tag_name} for Windows`);
+      document.querySelectorAll('[data-download-label]').forEach(s => s.textContent = `Download ${rel.tag_name} for Windows`);
+    })
+    .catch(() => {});
+  fetch('https://api.github.com/repos/VedantAndhale/arbiter')
+    .then(r => r.ok ? r.json() : null)
+    .then(repo => { if (repo && repo.stargazers_count > 0) { document.querySelector('[data-stars]').textContent = repo.stargazers_count.toLocaleString(); document.querySelector('[data-stars-label]').textContent = 'GitHub stars · MIT'; } })
+    .catch(() => {});
+</script>
+</body>
+</html>

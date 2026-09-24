@@ -1,0 +1,57 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/desktop/src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/arbiter-dev/arbiter"
+rust-version = "1.85"
+
+[workspace.dependencies]
+arbiter-core = { path = "crates/arbiter-core" }
+arbiter-store = { path = "crates/arbiter-store" }
+arbiter-supervisor = { path = "crates/arbiter-supervisor" }
+arbiter-adapters = { path = "crates/arbiter-adapters" }
+arbiter-heal = { path = "crates/arbiter-heal" }
+arbiter-browser = { path = "crates/arbiter-browser" }
+arbiter-intake = { path = "crates/arbiter-intake" }
+arbiter-plan = { path = "crates/arbiter-plan" }
+arbiter-brief = { path = "crates/arbiter-brief" }
+arbiter-vault = { path = "crates/arbiter-vault" }
+arbiter-setup = { path = "crates/arbiter-setup" }
+arbiter-project = { path = "crates/arbiter-project" }
+arbiter-local = { path = "crates/arbiter-local" }
+regex = "1"
+tokio-tungstenite = "0.28"
+futures-util = "0.3"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
+sha2 = "0.10"
+pdf-extract = "0.9"
+toml = "0.9"
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v7", "serde"] }
+time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+axum = { version = "0.8", features = ["ws"] }
+clap = { version = "4", features = ["derive", "env"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+dirs = "6"
+rand = "0.9"
+tempfile = "3"
+tower-http = { version = "0.6", features = ["cors"] }
+
+# See https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

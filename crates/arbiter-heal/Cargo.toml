@@ -1,0 +1,18 @@
+[package]
+name = "arbiter-heal"
+description = "Check detection, running, failure parsing and minimal excerpts for Arbiter's self-healing loop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+arbiter-supervisor.workspace = true
+anyhow.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

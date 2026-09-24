@@ -1,0 +1,10 @@
+{
+  "profile": "product-admin",
+  "sourceRoots": ["apps/desktop/src"],
+  "locale": "en",
+  "canonicalMap": "UX-CONTRACT.md",
+  "requiredCapabilities": ["Form", "Scrollbar", "Select/Listbox"],
+  "ownership": { "Select/Listbox": "native" },
+  "requiredCommands": ["build"],
+  "commands": { "build": "pnpm --dir apps/desktop build" }
+}

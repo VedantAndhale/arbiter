@@ -1,0 +1,25 @@
+[package]
+name = "arbiter-desktop"
+description = "Arbiter desktop shell (Tauri 2); a client of arbiterd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+# The `_lib` suffix avoids a lib/bin name clash on Windows (cargo#8519).
+name = "arbiter_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+arbiter-core.workspace = true
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde.workspace = true
+serde_json.workspace = true
+reqwest.workspace = true
+tokio = { workspace = true, features = ["time"] }
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"

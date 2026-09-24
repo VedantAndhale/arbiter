@@ -1,0 +1,113 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is the primary target; the others keep us honest about portability.
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Tauri system deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf clang libclang-dev cmake
+      - name: Libclang for the embedded model runtime (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m pip install --target target/intake-tooling libclang==18.1.1
+          "LIBCLANG_PATH=$pwd/target/intake-tooling/clang/native" >> $env:GITHUB_ENV
+      - name: LLVM for the embedded model runtime (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm
+          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> "$GITHUB_ENV"
+      - uses: Swatinem/rust-cache@v2
+      - name: Frontend dist placeholder for tauri::generate_context!
+        shell: bash
+        run: mkdir -p apps/desktop/dist && touch apps/desktop/dist/index.html
+      - name: Sidecar placeholders for the desktop crate's build script
+        shell: bash
+        run: |
+          triple=$(rustc -vV | sed -n 's/^host: //p')
+          ext=$([ "$RUNNER_OS" = "Windows" ] && echo .exe || echo)
+          mkdir -p apps/desktop/src-tauri/binaries
+          for b in arbiterd arbiter-mcp; do touch "apps/desktop/src-tauri/binaries/$b-$triple$ext"; done
+      - run: git config --global user.email ci@example.com && git config --global user.name ci
+      - run: cargo fmt --all --check
+        if: runner.os == 'Linux'
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - name: Local classifier latency benchmark
+        if: runner.os == 'Linux'
+        run: cargo run --release -p arbiter-intake --example bench -- target/intake-models potion
+
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: apps/desktop/pnpm-lock.yaml
+      - run: pnpm --dir apps/desktop install --frozen-lockfile
+      - run: pnpm --dir apps/desktop build
+
+  # Every change to main also builds the Windows installer, so a broken
+  # package shows up before release. Unsigned; download it from the run.
+  windows-installer:
+    if: github.event_name == 'push'
+    needs: [rust, ui]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: apps/desktop/pnpm-lock.yaml
+      - name: Libclang for the embedded model runtime
+        shell: pwsh
+        run: |
+          python -m pip install --target target/intake-tooling libclang==18.1.1
+          "LIBCLANG_PATH=$pwd/target/intake-tooling/clang/native" >> $env:GITHUB_ENV
+      - uses: Swatinem/rust-cache@v2
+      - name: Build the background service
+        shell: bash
+        run: |
+          cargo build --release -p arbiterd -p arbiter-mcp
+          mkdir -p apps/desktop/src-tauri/binaries
+          cp target/release/arbiterd.exe apps/desktop/src-tauri/binaries/arbiterd-x86_64-pc-windows-msvc.exe
+          cp target/release/arbiter-mcp.exe apps/desktop/src-tauri/binaries/arbiter-mcp-x86_64-pc-windows-msvc.exe
+      - run: pnpm --dir apps/desktop install --frozen-lockfile
+      - name: Build the installer (no update signing on main)
+        shell: pwsh
+        run: pnpm --dir apps/desktop tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arbiter-windows-installer
+          path: target/release/bundle/nsis/*.exe
+          retention-days: 14

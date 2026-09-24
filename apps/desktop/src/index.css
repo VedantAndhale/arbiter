@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", ui-monospace, Consolas, monospace;
+
+  --color-bg: oklch(0.16 0.005 260);
+  --color-panel: oklch(0.19 0.006 260);
+  --color-raised: oklch(0.23 0.008 260);
+  --color-line: oklch(0.29 0.008 260);
+  --color-fg: oklch(0.93 0.005 260);
+  --color-dim: oklch(0.68 0.01 260);
+  --color-faint: oklch(0.5 0.01 260);
+  --color-accent: oklch(0.72 0.14 265);
+  --color-ok: oklch(0.74 0.15 155);
+  --color-warn: oklch(0.8 0.14 80);
+  --color-bad: oklch(0.68 0.19 25);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: color-mix(in oklch, var(--color-accent) 35%, transparent);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
+
+button:not(:disabled), a { cursor: pointer; }
+button:disabled { cursor: default; }
+/* In the base layer so a component can replace the ring with its own
+   (composers highlight the whole box instead of the bare textarea). */
+@layer base {
+  :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: var(--color-bg); }
+*::-webkit-scrollbar-thumb { background: var(--color-line); border: 2px solid var(--color-bg); border-radius: 6px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--color-dim); }
+*::-webkit-scrollbar-thumb:active { background: var(--color-accent); }
+@media (forced-colors: active) { * { scrollbar-color: auto; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
