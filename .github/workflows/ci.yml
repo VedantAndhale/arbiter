@@ -104,8 +104,9 @@ jobs:
           cp target/release/arbiter-mcp.exe apps/desktop/src-tauri/binaries/arbiter-mcp-x86_64-pc-windows-msvc.exe
       - run: pnpm --dir apps/desktop install --frozen-lockfile
       - name: Build the installer (no update signing on main)
-        shell: pwsh
-        run: pnpm --dir apps/desktop tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'
+        shell: bash
+        # A file, not inline JSON: shells strip the quotes from inline JSON.
+        run: pnpm --dir apps/desktop tauri build --config src-tauri/tauri.ci.conf.json
       - uses: actions/upload-artifact@v4
         with:
           name: arbiter-windows-installer

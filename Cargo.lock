@@ -133,7 +133,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "arbiter-adapters"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "arbiter-core",
@@ -148,7 +148,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-brief"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "arbiter-core",
  "serde_json",
@@ -157,7 +157,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-browser"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "arbiter-core",
@@ -176,7 +176,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "arbiter-core",
@@ -188,7 +188,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "dirs",
@@ -201,7 +201,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-desktop"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "arbiter-core",
  "reqwest 0.12.28",
@@ -217,7 +217,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-heal"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "arbiter-core",
@@ -232,7 +232,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-intake"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "arbiter-core",
@@ -252,7 +252,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-local"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "arbiter-plan",
@@ -265,7 +265,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-mcp"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "reqwest 0.12.28",
@@ -275,7 +275,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-plan"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "arbiter-core",
  "serde",
@@ -285,7 +285,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-project"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "arbiter-core",
  "arbiter-supervisor",
@@ -301,7 +301,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-setup"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "rusqlite",
  "serde",
@@ -312,7 +312,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-store"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "arbiter-core",
  "rusqlite",
@@ -325,7 +325,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-supervisor"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "arbiter-core",
@@ -341,7 +341,7 @@ dependencies = [
 
 [[package]]
 name = "arbiter-vault"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "arbiter-core",
  "regex",
@@ -353,7 +353,7 @@ dependencies = [
 
 [[package]]
 name = "arbiterd"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "arbiter-adapters",
