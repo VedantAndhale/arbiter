@@ -3,11 +3,13 @@
 //! branch or stash. A snapshot includes untracked (non-ignored) files.
 
 use anyhow::{Context, Result, bail};
+use arbiter_core::NoWindow;
 use std::path::Path;
 use tokio::process::Command;
 
 async fn git(dir: &Path, args: &[&str], index: Option<&Path>) -> Result<String> {
     let mut c = Command::new("git");
+    c.no_window();
     c.arg("-C").arg(dir).args(args);
     if let Some(i) = index {
         c.env("GIT_INDEX_FILE", i);

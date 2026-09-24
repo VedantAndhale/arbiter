@@ -15,6 +15,7 @@ pub use claude::ClaudeCodec;
 pub use codex::CodexCodec;
 pub use runtime::RunHandle;
 
+use arbiter_core::NoWindow;
 use arbiter_core::{AgentEvent, PermissionMode};
 use std::path::PathBuf;
 
@@ -146,10 +147,13 @@ pub(crate) fn resolve(name: &str) -> anyhow::Result<tokio::process::Command> {
         .is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"));
     let mut command = if is_script {
         let mut c = tokio::process::Command::new("cmd");
+        c.no_window();
         c.arg("/C").arg(path);
         c
     } else {
-        tokio::process::Command::new(path)
+        let mut c = tokio::process::Command::new(path);
+        c.no_window();
+        c
     };
     arbiter_supervisor::process::hide_console(&mut command);
     Ok(command)

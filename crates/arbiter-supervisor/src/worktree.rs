@@ -2,6 +2,7 @@
 //! behaviour matches what users and agents see on the command line.
 
 use anyhow::{Context, Result, bail};
+use arbiter_core::NoWindow;
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
 
@@ -68,6 +69,7 @@ impl WorktreeManager {
 
 async fn git(dir: &Path, args: &[&str]) -> Result<String> {
     let out = Command::new("git")
+        .no_window()
         .arg("-C")
         .arg(dir)
         .args(args)

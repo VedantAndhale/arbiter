@@ -6,6 +6,7 @@
 //! the work is merged or abandoned, the local copies and branches go away.
 use crate::AppState;
 use anyhow::{Context, Result, bail, ensure};
+use arbiter_core::NoWindow;
 use arbiter_core::{EventKind, ThreadId, ThreadStatus};
 use arbiter_supervisor::integration::git;
 use serde::{Deserialize, Serialize};
@@ -45,6 +46,7 @@ fn slug(s: &str) -> String {
 
 fn gh_available() -> bool {
     std::process::Command::new("gh")
+        .no_window()
         .arg("--version")
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -110,6 +112,7 @@ impl AppState {
                 .into_iter()
                 .find(|b| {
                     std::process::Command::new("git")
+                        .no_window()
                         .arg("-C")
                         .arg(repo)
                         .args(["show-ref", "--verify", "-q", &format!("refs/heads/{b}")])

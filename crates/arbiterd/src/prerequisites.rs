@@ -2,6 +2,7 @@
 //! install is an explicit, approved action and runs as a background job.
 use crate::AppState;
 use anyhow::{Context, Result, ensure};
+use arbiter_core::NoWindow;
 use arbiter_supervisor::prereq::{self, Tool};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -16,7 +17,12 @@ pub(crate) struct Job {
 pub(crate) type Jobs = HashMap<&'static str, Job>;
 
 async fn git_config(key: &str) -> Option<String> {
-    let out = tokio::process::Command::new("git").args(["config", "--global", "--get", key]).output().await.ok()?;
+    let out = tokio::process::Command::new("git")
+        .no_window()
+        .args(["config", "--global", "--get", key])
+        .output()
+        .await
+        .ok()?;
     let v = String::from_utf8_lossy(&out.stdout).trim().to_owned();
     (out.status.success() && !v.is_empty()).then_some(v)
 }
@@ -146,7 +152,11 @@ impl AppState {
             "enter a valid email address"
         );
         for (key, value) in [("user.name", name), ("user.email", email)] {
-            let out = tokio::process::Command::new("git").args(["config", "--global", key, value]).output().await?;
+            let out = tokio::process::Command::new("git")
+                .no_window()
+                .args(["config", "--global", key, value])
+                .output()
+                .await?;
             ensure!(out.status.success(), "git could not save {key}");
         }
         Ok(json!({"name":name,"email":email}))

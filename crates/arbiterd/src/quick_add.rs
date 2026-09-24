@@ -4,12 +4,14 @@
 //! the user's review of what goes into that first version.
 use crate::AppState;
 use anyhow::{Context, Result};
+use arbiter_core::NoWindow;
 use serde_json::{Value, json};
 use std::path::Path;
 
 fn has_history(root: &Path) -> bool {
     root.join(".git").exists()
         && std::process::Command::new("git")
+            .no_window()
             .arg("-C")
             .arg(root)
             .args(["rev-parse", "--verify", "-q", "HEAD"])

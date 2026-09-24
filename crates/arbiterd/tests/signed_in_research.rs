@@ -145,6 +145,15 @@ async fn dynamic_and_signed_in_pages() {
         .await
         .unwrap();
     let thread = t["id"].as_str().unwrap().to_owned();
+    // Let the fake agent's first turn finish, so its status change cannot
+    // land after the permission card's (a real agent waits for research).
+    for _ in 0..200 {
+        let t: Value = get(&format!("/v1/threads/{thread}")).send().await.unwrap().json().await.unwrap();
+        if t["status"] == "review" {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
     let research = {
         let client = client.clone();
         let url = format!("{base}/v1/threads/{thread}/research");

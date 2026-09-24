@@ -1,5 +1,6 @@
 //! Git mutations for isolated plan worktrees. The user's checkout is never reset.
 use anyhow::{Context, Result, ensure};
+use arbiter_core::NoWindow;
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
 
@@ -7,6 +8,7 @@ pub async fn git(path: &Path, args: &[&str]) -> Result<String> {
     let output = tokio::time::timeout(
         std::time::Duration::from_secs(120),
         Command::new("git")
+            .no_window()
             .arg("-C")
             .arg(path)
             .args(args)

@@ -12,3 +12,4 @@ uuid.workspace = true
 time.workspace = true
 dirs.workspace = true
 anyhow.workspace = true
+tokio = { workspace = true, features = ["process"] }

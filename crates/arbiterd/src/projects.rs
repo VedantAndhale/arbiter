@@ -1,5 +1,6 @@
 use crate::{AppState, service::WS};
 use anyhow::{Context, Result, ensure};
+use arbiter_core::NoWindow;
 use arbiter_project::{Adoption, Inventory, safe_path};
 use serde_json::{Value, json};
 use std::{
@@ -149,6 +150,7 @@ impl AppState {
         // Worktrees branch from HEAD; a repository without commits would fail
         // every agent later with a confusing error.
         let has_commit = std::process::Command::new("git")
+            .no_window()
             .arg("-C")
             .arg(&root)
             .args(["rev-parse", "--verify", "-q", "HEAD"])
@@ -171,7 +173,7 @@ impl AppState {
 pub(crate) async fn user_git(root: &Path, args: &[&str]) -> Result<String> {
     let out = tokio::time::timeout(
         std::time::Duration::from_secs(120),
-        tokio::process::Command::new("git").arg("-C").arg(root).args(args).kill_on_drop(true).output(),
+        tokio::process::Command::new("git").no_window().arg("-C").arg(root).args(args).kill_on_drop(true).output(),
     )
     .await
     .context("git timed out")??;

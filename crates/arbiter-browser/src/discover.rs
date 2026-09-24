@@ -68,10 +68,13 @@ fn playwright(cache: &std::path::Path, dir: &str, exe: &str) -> Vec<PathBuf> {
 
 #[cfg(windows)]
 fn registry_app_path(exe: &str) -> Vec<PathBuf> {
+    use arbiter_core::NoWindow;
     let mut out = Vec::new();
     for hive in ["HKLM", "HKCU"] {
         let key = format!(r"{hive}\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{exe}");
-        let Ok(o) = std::process::Command::new("reg").args(["query", &key, "/ve"]).output() else { continue };
+        let Ok(o) = std::process::Command::new("reg").no_window().args(["query", &key, "/ve"]).output() else {
+            continue;
+        };
         let text = String::from_utf8_lossy(&o.stdout);
         // "    (Default)    REG_SZ    C:\...\chrome.exe"
         if let Some(path) = text.lines().find_map(|l| l.split("REG_SZ").nth(1)).map(|p| p.trim().trim_matches('"')) {

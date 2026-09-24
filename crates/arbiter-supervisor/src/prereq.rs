@@ -1,6 +1,7 @@
 //! Tools Arbiter needs on this computer: detection with versions, and the
 //! official install command per platform. Installing is always a separate,
 //! explicitly approved step run by the daemon.
+use arbiter_core::NoWindow;
 use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -121,7 +122,9 @@ fn command(program: &str) -> tokio::process::Command {
         c.creation_flags(0x0800_0000);
         c
     } else {
-        tokio::process::Command::new(program)
+        let mut c = tokio::process::Command::new(program);
+        c.no_window();
+        c
     };
     c.stdin(std::process::Stdio::null()).kill_on_drop(true);
     c
@@ -161,7 +164,10 @@ pub async fn install(tool: Tool) -> Result<String, String> {
 pub fn open_terminal(cmdline: &str) -> std::io::Result<()> {
     #[cfg(windows)]
     {
-        std::process::Command::new("cmd").args(["/C", "start", "Arbiter sign-in", "cmd", "/K", cmdline]).spawn()?;
+        std::process::Command::new("cmd")
+            .no_window()
+            .args(["/C", "start", "Arbiter sign-in", "cmd", "/K", cmdline])
+            .spawn()?;
     }
     #[cfg(target_os = "macos")]
     {

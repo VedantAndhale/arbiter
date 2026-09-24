@@ -4,6 +4,9 @@ import { useApi } from "../ApiContext";
 import type { ArbEvent, Assessment, EventKind, LocalCapability, Question } from "../api";
 import { Button, Dialog, Input } from "./ui";
 
+/** "0.3 s", "34 s" */
+const seconds = (ms: number) => (ms < 10_000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms / 1000)} s`);
+
 export function pendingCards(events: ArbEvent[]) {
   let questions: Extract<EventKind, { type: "questions_asked" }> | null = null;
   const approvals = new Map<string, Extract<EventKind, { type: "approval_requested" }>>();
@@ -136,7 +139,9 @@ export function ModelDialog({ onClose }: { onClose: () => void }) {
         {progress?.phase === "benchmarking" && <p role="status" className="my-2 text-dim">Benchmarking on this computer…</p>}
         {progress?.phase === "downloading" && <Button disabled={cancel.isPending} onClick={()=>cancel.mutate(m.id)}>Cancel download</Button>}
         {progress?.phase === "cancelling" && <p role="status">Cancelling download…</p>}
-        {benchmark && <p className={`my-2 text-[12px] ${benchmark.meets_target ? "text-ok" : "text-warn"}`}>Warm completion: {Math.round(benchmark.complete_ms)} ms · target {benchmark.target_ms} ms · {benchmark.meets_target ? "target met" : "target not met"}</p>}
+        {benchmark && <p className={`my-2 text-[12px] ${benchmark.meets_target ? "text-ok" : "text-warn"}`}>{benchmark.meets_target
+          ? `Fast enough for questions on this computer (${seconds(benchmark.complete_ms)}).`
+          : `Too slow for questions before each task (${seconds(benchmark.complete_ms)}; under ${seconds(benchmark.target_ms)} is needed). It is still used for reviews, research and commit messages, which run in the background.`}</p>}
         {progress?.error && <p role="alert" className="my-2 text-[12px] text-bad">{progress.error}</p>}
         <div className="mt-2 flex flex-wrap gap-2"><Button disabled={busy || action.isPending || (!ready && m.id === "lfm" && !license)} onClick={() => action.mutate({ id: m.id, op: ready ? "benchmark" : "install" })}>{busy ? "Working…" : ready ? "Run benchmark" : "Download and set up"}</Button>
           {ready && m.id !== "potion" && models.data?.selected !== m.id && <Button disabled={busy || action.isPending} onClick={() => action.mutate({ id: m.id, op: "select" })}>Use for questions</Button>}

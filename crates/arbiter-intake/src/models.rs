@@ -377,7 +377,9 @@ impl Manager {
                 total = total.max(g.total_ms);
             }
         }
-        let target = if id == "potion" { 5.0 } else { 300.0 };
+        // Questions appear before a task starts, so a few seconds is the
+        // most anyone should wait; the classifier must be near-instant.
+        let target = if id == "potion" { 5.0 } else { 5000.0 };
         let result = Benchmark {
             first_token_ms: first,
             complete_ms: total,

@@ -1,5 +1,6 @@
 use crate::AppState;
 use anyhow::{Context, Result, ensure};
+use arbiter_core::NoWindow;
 use arbiter_core::{EventKind, ThreadId, ThreadStatus};
 use arbiter_supervisor::integration::git;
 use serde::Deserialize;
@@ -239,6 +240,7 @@ impl AppState {
 
 pub(crate) async fn gh(path: &std::path::Path, args: &[&str]) -> Result<String> {
     let mut command = tokio::process::Command::new("gh");
+    command.no_window();
     command
         .current_dir(path)
         .args(args)

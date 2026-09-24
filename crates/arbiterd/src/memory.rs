@@ -6,6 +6,7 @@
 //! stop (a flat battery, say) it pushes on the next start.
 use crate::AppState;
 use anyhow::{Context, Result, ensure};
+use arbiter_core::NoWindow;
 use arbiter_supervisor::integration::git;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -321,7 +322,7 @@ impl AppState {
             "dirty": dirty,
             "last_commit": last,
             "last_push": self.keeper().last_push,
-            "gh": std::process::Command::new("gh").arg("--version").stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status().is_ok_and(|s| s.success()),
+            "gh": std::process::Command::new("gh").no_window().arg("--version").stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status().is_ok_and(|s| s.success()),
             "guidance": self.user_guidance().is_some(),
             "committed_in_projects": self.committed_in_projects().await,
         }))

@@ -1,6 +1,7 @@
 //! Start a project's dev server on a free port and wait until it answers.
 
 use anyhow::{Result, bail};
+use arbiter_core::NoWindow;
 use arbiter_supervisor::SupervisedChild;
 use std::path::Path;
 use std::process::Stdio;
@@ -34,6 +35,7 @@ impl DevServer {
             c
         } else {
             let mut c = tokio::process::Command::new("sh");
+            c.no_window();
             c.arg("-c").arg(&cmd);
             c
         };

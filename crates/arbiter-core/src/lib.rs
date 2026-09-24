@@ -5,6 +5,7 @@ pub mod discovery;
 pub mod event;
 pub mod ids;
 pub mod intake;
+pub mod quiet;
 pub mod task;
 pub mod title;
 
@@ -12,6 +13,7 @@ pub use discovery::{DaemonInfo, arbiter_home};
 pub use event::{AgentEvent, AttachmentRef, CheckResult, Event, EventKind, PermissionMode, ThreadStatus, Usage};
 pub use ids::{ProjectId, RunId, TaskId, ThreadId, WorkspaceId};
 pub use intake::{Answer, Assessment, IntentSpec, Question, QuestionKind, QuestionOption, ToolProfile};
+pub use quiet::NoWindow;
 pub use task::{Priority, Task, TaskStatus};
 pub use title::derive_title;
 pub mod plan;

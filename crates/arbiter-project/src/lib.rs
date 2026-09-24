@@ -1,5 +1,6 @@
 //! Bounded project inventory and durable, create-only adoption transactions.
 //! Repository text is data. Inspection never executes project code.
+use arbiter_core::NoWindow;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -110,6 +111,7 @@ fn read_capped(path: &Path, cap: u64) -> Result<Option<Vec<u8>>> {
 fn list_files(root: &Path, git: bool, warnings: &mut Vec<String>) -> Result<Vec<String>> {
     if git {
         let out = std::process::Command::new("git")
+            .no_window()
             .arg("-C")
             .arg(root)
             .args(["ls-files", "-z", "--cached", "--others", "--exclude-standard"])

@@ -1,4 +1,5 @@
 //! Approved notes are data, never instructions. Retrieval has a hard byte budget.
+use arbiter_core::NoWindow;
 use arbiter_core::vault::Note;
 use std::{collections::BTreeSet, path::Path};
 
@@ -174,6 +175,7 @@ pub fn mirror(repo: &Path, note: &Note) -> Result<(), Box<dyn std::error::Error 
     temporary.persist(&path)?;
     // Keep generated knowledge outside checkpoint/scope diffs without modifying tracked project files.
     let output = std::process::Command::new("git")
+        .no_window()
         .arg("-C")
         .arg(repo)
         .args(["rev-parse", "--git-path", "info/exclude"])

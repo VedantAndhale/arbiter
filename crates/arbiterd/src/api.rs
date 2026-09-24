@@ -1,5 +1,6 @@
 use crate::service::{TaskStart, ThreadSpec, WS};
 use crate::{AppState, WsMsg};
+use arbiter_core::NoWindow;
 use arbiter_core::{EventKind, PermissionMode, ProjectId, TaskId, ThreadId};
 use arbiter_store::{NewTask, StoreError, TaskPatch};
 use arbiter_supervisor::Worktree;
@@ -553,6 +554,7 @@ async fn project_files(State(s): State<AppState>, Path(id): Path<String>) -> Api
     let output = tokio::time::timeout(
         std::time::Duration::from_secs(5),
         tokio::process::Command::new("git")
+            .no_window()
             .args(["ls-files", "-z", "--cached", "--others", "--exclude-standard"])
             .current_dir(p.path)
             .kill_on_drop(true)

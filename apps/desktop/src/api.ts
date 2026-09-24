@@ -409,17 +409,26 @@ export class Api {
   readFile = (id: string, path: string) => this.req<{ path: string; content: string; hash: string }>(`/v1/threads/${id}/file?path=${encodeURIComponent(path)}`);
   writeFile = (id: string, path: string, content: string, hash: string) => this.req<{ path: string; hash: string }>(`/v1/threads/${id}/file`, { method: "PUT", body: JSON.stringify({ path, content, hash }) });
 
-  private async req<T>(path: string, init?: RequestInit & { text?: boolean }): Promise<T> {
+  /** `slow` is for work done by a local model, which can take minutes on
+   *  an ordinary computer; everything else answers within two minutes. */
+  private async req<T>(path: string, init?: RequestInit & { text?: boolean; slow?: boolean }): Promise<T> {
 
-    const res = await fetch(this.conn.base_url + path, {
-
-      signal: AbortSignal.timeout(120_000),
-
-      ...init,
-
-      headers: { Authorization: `Bearer ${this.conn.token}`, "Content-Type": "application/json", ...init?.headers },
-
-    });
+    const limit = init?.slow ? 20 * 60_000 : 120_000;
+    let res: Response;
+    try {
+      res = await fetch(this.conn.base_url + path, {
+        signal: AbortSignal.timeout(limit),
+        ...init,
+        headers: { Authorization: `Bearer ${this.conn.token}`, "Content-Type": "application/json", ...init?.headers },
+      });
+    } catch (e) {
+      if (e instanceof DOMException && (e.name === "TimeoutError" || e.name === "AbortError")) {
+        throw new Error(init?.slow
+          ? "This is taking unusually long. Arbiter keeps working on it in the background; check again in a few minutes."
+          : "Arbiter's background service did not answer in time. It may be busy; try again in a moment.");
+      }
+      throw new Error("Can't reach Arbiter's background service. If you closed it, start Arbiter again.");
+    }
 
     if (!res.ok) {
 
@@ -485,18 +494,18 @@ export class Api {
 
   localModels = () => this.req<LocalModels>("/v1/models");
   localCapability = () => this.req<LocalCapabilityReport>("/v1/local/capability");
-  checkLocalCapability = (model: string) => this.req<LocalCapability>("/v1/local/capability", { method: "POST", body: JSON.stringify({ model }) });
+  checkLocalCapability = (model: string) => this.req<LocalCapability>("/v1/local/capability", { method: "POST", body: JSON.stringify({ model }), slow: true });
   review = (id: string, comments: ReviewComment[], revision?: number) => this.req<{ kind: "plan" | "message" }>(`/v1/threads/${id}/review`, { method: "POST", body: JSON.stringify({ comments, revision }) });
   /** `project` picks one of a multi-project plan's other projects. */
   landing = (id: string, project?: string) => this.req<LandingStatus>(`/v1/threads/${id}/landing${project ? `?project=${encodeURIComponent(project)}` : ""}`);
   commit = (id: string, fingerprint: string, message: string, include: string[], project?: string) => this.req<LandingStatus>(`/v1/threads/${id}/commit`, { method: "POST", body: JSON.stringify({ fingerprint, message, include, project }) });
-  publishDraft = (id: string, project?: string) => this.req<PublishDraft>(`/v1/threads/${id}/publish${project ? `?project=${encodeURIComponent(project)}` : ""}`);
+  publishDraft = (id: string, project?: string) => this.req<PublishDraft>(`/v1/threads/${id}/publish${project ? `?project=${encodeURIComponent(project)}` : ""}`, { slow: true });
   publish = (id: string, p: { fingerprint: string; mode: PublishMode; base: string; branch: string; message: string; title: string; body: string; project?: string }) => this.req<{ url: string | null; branch: string; commit: string; mode: PublishMode }>(`/v1/threads/${id}/publish`, { method: "POST", body: JSON.stringify({ ...p, approved: true }) });
   startComparison = (project_id: string, message: string, candidates: CompareCandidate[]) => this.req<{ id: string; threads: string[] }>("/v1/comparisons", { method: "POST", body: JSON.stringify({ project_id, message, candidates, approved: true }) });
   comparison = (id: string) => this.req<Comparison>(`/v1/comparisons/${id}`);
   keepCandidate = (id: string, thread: string) => this.req<Comparison>(`/v1/comparisons/${id}/keep`, { method: "POST", body: JSON.stringify({ thread }) });
-  sideQuestion = (id: string, question: string) => this.req<{ answer: string; model: string }>(`/v1/threads/${id}/side`, { method: "POST", body: JSON.stringify({ question }) });
-  escalate = (id: string, harness: "claude" | "codex") => this.req<{ ok: boolean; handoff_chars: number }>(`/v1/threads/${id}/escalate`, { method: "POST", body: JSON.stringify({ harness }) });
+  sideQuestion = (id: string, question: string) => this.req<{ answer: string; model: string }>(`/v1/threads/${id}/side`, { method: "POST", body: JSON.stringify({ question }), slow: true });
+  escalate = (id: string, harness: "claude" | "codex") => this.req<{ ok: boolean; handoff_chars: number }>(`/v1/threads/${id}/escalate`, { method: "POST", body: JSON.stringify({ harness }), slow: true });
 
   planDiff = (id: string, project?: string) => this.req<string>(`/v1/threads/${id}/plan/diff${project ? `?project=${encodeURIComponent(project)}` : ""}`, {text:true});
 
@@ -516,7 +525,7 @@ export class Api {
 
   installModel = (id: string, accept_license: boolean) => this.req<LocalModels>(`/v1/models/${id}/install`, { method: "POST", body: JSON.stringify({ accept_license }) });
 
-  benchmarkModel = (id: string) => this.req<LocalModels>(`/v1/models/${id}/benchmark`, { method: "POST", body: "{}" });
+  benchmarkModel = (id: string) => this.req<LocalModels>(`/v1/models/${id}/benchmark`, { method: "POST", body: "{}", slow: true });
 
   selectLocalModel = (id: string) => this.req<LocalModels>(`/v1/models/${id}/select`, { method: "POST", body: "{}" });
 
@@ -527,7 +536,7 @@ export class Api {
   shutdown = (force: boolean) => this.req<{ stopping: boolean }>("/v1/shutdown", { method: "POST", body: JSON.stringify({ force }) });
   memorySync = (push: boolean, closing: boolean) => this.req<MemoryStatus>("/v1/memory/sync", { method: "POST", body: JSON.stringify({ push, closing }) });
   memoryRemote = (url: string) => this.req<MemoryStatus>("/v1/memory/remote", { method: "POST", body: JSON.stringify({ url }) });
-  memoryGithub = (name: string) => this.req<MemoryStatus>("/v1/memory/github", { method: "POST", body: JSON.stringify({ name, approved: true }) });
+  memoryGithub = (name: string) => this.req<MemoryStatus>("/v1/memory/github", { method: "POST", body: JSON.stringify({ name, approved: true }), slow: true });
   webSites = () => this.req<{ sites: string[] }>("/v1/web/sites");
   addWebSite = (url: string) => this.req<{ host: string; sites: string[] }>("/v1/web/sites", { method: "POST", body: JSON.stringify({ url }) });
   removeWebSite = (host: string) => this.req<{ sites: string[]; signed_out: boolean; note: string | null }>(`/v1/web/sites/${encodeURIComponent(host)}`, { method: "DELETE" });
