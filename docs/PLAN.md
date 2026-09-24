@@ -413,6 +413,27 @@ Status: G0–G6 are implemented. Templates were dropped in favour of a single "A
   - `memory_backup.rs`: automatic creation, redaction, guidance once per task, pushing, the push after a crash but not after a normal close, migration of old leftovers, reporting of committed files, and restore.
   - `publish_squash.rs`: a new `.arbiter` file stays out of the published commit.
 
+### Local intelligence: speed and new runtimes (plan, measured 2026-09-25)
+
+**Where the time goes.** On ordinary computers, writing (decoding) is the slow part, and it is limited by memory speed. Measured on a Ryzen 7 5850U laptop (2021, 15 GB, integrated Radeon, no NPU):
+- Granite 4.1 3B (llama.cpp, CPU): about 10 words/s written.
+- Gemma 4 E2B (LiteRT-LM 0.17.1): CPU 109 words/s read and 9.5 written; integrated GPU 39 read and 13.8 written, 11 s to load.
+
+For comparison, Google lists Gemma 4 E2B on a Galaxy S26 Ultra GPU at 3,808 read and 52 written, and on an Intel Lunar Lake GPU at 3,751 and 48. Phones feel fast because of newer AI hardware and because chat streams words as they arrive.
+
+**Order of work.**
+1. **Write less.** **Done:** the question writer now asks 1–2 questions as `{header, question}`, and the runtime adds the fixed fields. Granite went from 34.4 s to 6.8 s on the laptop above.
+2. **Stream the first question.** Show each question as soon as its JSON object closes, instead of after the whole reply.
+3. **Right model per job.** LFM 2.5 1.2B for anything the user waits on (questions); Granite or Gemma for background jobs (reviews, research, commit messages), where 20–30 s is acceptable. The recommendation uses measured speed per job.
+4. **Start early.** Draft questions while the user is still typing (debounced, cancelled when the text changes), so they are ready at Start.
+5. **GPU for llama.cpp.** A Vulkan build of the runtime, detected at start with a CPU fallback. It needs the Vulkan SDK at build time only. Expect larger gains on newer GPUs than on older integrated graphics.
+6. **LiteRT-LM backend for Gemma 4 E2B/E4B** (Apache-2.0 models and runtime, ungated on `litert-community`), for machines where it clearly wins: Intel Lunar Lake and newer, AMD Ryzen AI, Apple M-series, NVIDIA GPUs and NPUs.
+   - **Detection:** run a short benchmark once per machine, and use LiteRT only where it beats llama.cpp for the job.
+   - **Integration:** Google publishes C API prebuilts for Apple platforms. On Windows the runtime ships inside the `litert-lm-api` wheel, so either load its native library directly or wait for Windows C prebuilts. The `litert-lm serve` OpenAI-compatible server is a fallback, but it needs Python and is not acceptable for non-technical users.
+   - **Output:** there is no grammar-constrained JSON, so replies are validated, trimmed to the field limits and retried once. In testing it produced valid question JSON on 2 of 2 runs, with one header 2 characters over the limit.
+   - **Downloads:** the model (2.0–2.6 GB) and the runtime (25 MB) download on demand, with checksums and the licence shown, like today's models.
+7. **Evaluate ik_llama.cpp** (Iwan Kawrakow's CPU-focused fork) for long-input jobs such as reviews and research, where reading the prompt dominates. It reports about twice the prompt speed on CPUs, and its IQ_K formats are smaller at equal quality. Its IQ_K quantization is being merged into upstream llama.cpp; prefer upstream once that lands, and otherwise run its `llama-server` as a sidecar rather than maintaining a second binding.
+
 ### Phase R: distribution and updates (plan; start when the product is ready to share)
 
 - **Packaging.**
