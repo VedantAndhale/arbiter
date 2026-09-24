@@ -179,7 +179,7 @@
       <a class="btn primary lg" href="https://github.com/VedantAndhale/arbiter/releases/latest" data-download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 21h16"/></svg><span data-download-label>Download for Windows</span></a>
       <a class="btn lg" href="https://github.com/VedantAndhale/arbiter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg>View the source</a>
     </div>
-    <p class="fine">Installs per user, no admin rights needed. Updates itself. macOS and Linux are coming.</p>
+    <p class="fine"><span data-asset-info>Windows 10 and 11, 64-bit</span> · installs per user, no admin rights needed · updates itself · <a href="https://github.com/VedantAndhale/arbiter/releases/latest" style="color:var(--dim);text-decoration:underline;text-underline-offset:3px">Release notes and all downloads</a></p>
     <div class="works"><span>Works with Claude Code</span><span>Codex</span><span>Local models</span><span>Any Git repository</span></div>
 
     <div class="mock reveal" role="img" aria-label="The Arbiter app: a plan with parallel steps, their checks, and a clean commit ready to publish">
@@ -330,6 +330,7 @@
     <h2 class="reveal">Hand off the work. Keep the control.</h2>
     <p class="sub reveal" style="margin:0 auto">Free, open source, and running on your machine in a couple of minutes.</p>
     <div class="cta reveal"><a class="btn primary lg" href="https://github.com/VedantAndhale/arbiter/releases/latest" data-download><span data-download-label>Download for Windows</span></a><a class="btn lg" href="https://github.com/VedantAndhale/arbiter">View the source</a></div>
+    <p class="fine reveal"><a href="https://github.com/VedantAndhale/arbiter/releases/latest" style="color:var(--dim);text-decoration:underline;text-underline-offset:3px">Release notes and all downloads</a></p>
   </div>
 </section>
 
@@ -357,7 +358,11 @@
     .then(rel => {
       if (!rel) return;
       const exe = (rel.assets || []).find(a => /setup\.exe$/i.test(a.name) || /\.exe$/i.test(a.name));
-      if (exe) document.querySelectorAll('[data-download]').forEach(a => a.href = exe.browser_download_url);
+      if (exe) {
+        document.querySelectorAll('[data-download]').forEach(a => a.href = exe.browser_download_url);
+        const mb = (exe.size / 1048576).toFixed(1);
+        document.querySelectorAll('[data-asset-info]').forEach(s => s.textContent = `${rel.tag_name} · ${mb} MB · Windows 10 and 11, 64-bit`);
+      }
       document.querySelectorAll('[data-version]').forEach(s => s.textContent = `${rel.tag_name} for Windows`);
       document.querySelectorAll('[data-download-label]').forEach(s => s.textContent = `Download ${rel.tag_name} for Windows`);
     })
