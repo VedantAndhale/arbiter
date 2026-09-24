@@ -61,9 +61,11 @@ fn platform(path: &Path) -> (Option<u64>, Option<u64>) {
             None
         } else {
             let s = stat.assume_init();
-            // The field widths differ between Unix systems; `from` widens
-            // where needed without a lint on systems where they are u64.
-            Some(u64::from(s.f_bavail).saturating_mul(u64::from(s.f_frsize)))
+            // The field widths differ between Unix systems (u64 on Linux,
+            // u32 for f_bavail on macOS), so the cast is needed on some.
+            #[allow(clippy::unnecessary_cast)]
+            let (avail, block) = (s.f_bavail as u64, s.f_frsize as u64);
+            Some(avail.saturating_mul(block))
         }
     });
     (ram, disk)
