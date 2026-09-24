@@ -572,7 +572,7 @@ impl AppState {
             self.append(root, EventKind::StatusChanged { status: ThreadStatus::Review })?;
             return Ok(());
         }
-        let cpu = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(2);
+        let cpu = self.inner.cpus.unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(2));
         let healthy = state.nodes.values().filter(|n| n.status == NodeStatus::Merged).count();
         let cap = plan.concurrency.min((cpu / 2).max(1)).min(3 + healthy / 2).min(self.max_cloud_runs()?);
         let mut active = state

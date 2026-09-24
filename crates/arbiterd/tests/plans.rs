@@ -43,6 +43,8 @@ impl Fixture {
         config.heal = false;
         config.available = Arc::new(|_| true);
         config.fixture_accounts = Some(arbiterd::fixture_accounts());
+        // CI machines can have 3 cores; these tests are about overlap.
+        config.cpus = Some(8);
         config.launcher = Arc::new(move |_, opts| {
             let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
             let (events, ev) = tokio::sync::mpsc::unbounded_channel();

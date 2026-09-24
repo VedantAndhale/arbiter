@@ -7,6 +7,10 @@ use axum::routing::get;
 use std::sync::Arc;
 use std::time::Duration;
 
+/// One real browser at a time: three cold starts at once are slow on small
+/// CI machines.
+static ONE_BROWSER: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 const PAGE: &str = r#"<!doctype html><html><head><title>Demo</title></head><body>
 <main><h1>Checkout</h1><button id="pay" class="btn primary" aria-label="Pay now">Pay</button>
 <img src="/missing.png" alt="logo"></main>
@@ -25,6 +29,7 @@ async fn serve() -> String {
 
 #[tokio::test]
 async fn persistent_preview_inspects_types_clicks_and_bounds_output() {
+    let _one = ONE_BROWSER.lock().await;
     let Some(exe) = find_browser() else {
         eprintln!("no Chromium browser found; skipping");
         return;
@@ -80,6 +85,7 @@ async fn persistent_preview_inspects_types_clicks_and_bounds_output() {
 
 #[tokio::test]
 async fn reports_errors_queries_dom_and_a11y() {
+    let _one = ONE_BROWSER.lock().await;
     let Some(exe) = find_browser() else {
         eprintln!("no Chromium browser found; skipping");
         return;
@@ -116,6 +122,7 @@ async fn reports_errors_queries_dom_and_a11y() {
 
 #[tokio::test]
 async fn renders_script_text_on_a_kept_profile_and_forgets_cookies() {
+    let _one = ONE_BROWSER.lock().await;
     let Some(exe) = find_browser() else {
         eprintln!("no Chromium browser found; skipping");
         return;

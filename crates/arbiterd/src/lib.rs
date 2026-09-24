@@ -78,6 +78,9 @@ pub struct Config {
     pub local_generator: Option<LocalGenerator>,
     pub documentation_transport: Option<DocumentationTransport>,
     pub web_transport: Option<WebTransport>,
+    /// CPUs the plan engine plans around; `None` asks the OS. Tests pin it
+    /// so parallelism does not depend on the machine.
+    pub cpus: Option<usize>,
     pub credential_store: Option<Arc<dyn arbiter_supervisor::credentials::CredentialStore>>,
 }
 
@@ -98,6 +101,7 @@ impl Config {
             local_generator: None,
             documentation_transport: None,
             web_transport: None,
+            cpus: None,
             credential_store: None,
         }
     }
@@ -154,6 +158,7 @@ struct Inner {
     review_lock: tokio::sync::Mutex<()>,
     documentation_transport: Option<DocumentationTransport>,
     web_transport: Option<WebTransport>,
+    cpus: Option<usize>,
     credential_store: Arc<dyn arbiter_supervisor::credentials::CredentialStore>,
     context7_session_key: Mutex<Option<String>>,
     documentation_preparing:
@@ -246,6 +251,7 @@ pub async fn start(cfg: Config) -> Result<Running> {
             local_generator: cfg.local_generator,
             documentation_transport: cfg.documentation_transport,
             web_transport: cfg.web_transport,
+            cpus: cfg.cpus,
             credential_store: cfg.credential_store.unwrap_or_else(|| {
                 if cfg.fixture_accounts.is_some() {
                     Arc::new(arbiter_supervisor::credentials::MemoryCredentials::default())

@@ -91,13 +91,15 @@ impl AppState {
             self.inner.setup.lock().unwrap().read()?.network,
             "Installing needs network access; turn it on in Settings"
         );
+        // Installed first: that answer is right on every system, including
+        // ones where Arbiter has no installer for the tool.
+        ensure!(prereq::version(tool).await.is_none(), "{} is already installed", tool.name());
         ensure!(
             tool.install_command().is_some(),
             "Arbiter cannot install {} here; use {}",
             tool.name(),
             tool.manual_url()
         );
-        ensure!(prereq::version(tool).await.is_none(), "{} is already installed", tool.name());
         if matches!(tool, Tool::ClaudeCode | Tool::Codex) {
             ensure!(
                 prereq::version(Tool::Node).await.is_some(),

@@ -67,7 +67,8 @@ impl Browser {
         // Chrome announces "DevTools listening on ws://…" on stderr.
         let stderr = child.child.stderr.take().expect("piped");
         let mut lines = BufReader::new(stderr).lines();
-        let ws_url = tokio::time::timeout(Duration::from_secs(20), async {
+        // A cold first start (new profile, slow disk, antivirus) can be slow.
+        let ws_url = tokio::time::timeout(Duration::from_secs(60), async {
             while let Some(l) = lines.next_line().await? {
                 if let Some(u) = l.split("DevTools listening on ").nth(1) {
                     return Ok::<_, anyhow::Error>(u.trim().to_owned());
@@ -76,7 +77,7 @@ impl Browser {
             bail!("browser exited before opening DevTools")
         })
         .await
-        .context("browser did not start within 20s")??;
+        .context("browser did not start within 60s")??;
         // Keep draining stderr so the browser never blocks on a full pipe.
         tokio::spawn(async move { while let Ok(Some(_)) = lines.next_line().await {} });
 
