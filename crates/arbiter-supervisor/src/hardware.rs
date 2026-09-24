@@ -61,7 +61,9 @@ fn platform(path: &Path) -> (Option<u64>, Option<u64>) {
             None
         } else {
             let s = stat.assume_init();
-            Some((s.f_bavail as u64).saturating_mul(s.f_frsize as u64))
+            // The field widths differ between Unix systems; `from` widens
+            // where needed without a lint on systems where they are u64.
+            Some(u64::from(s.f_bavail).saturating_mul(u64::from(s.f_frsize)))
         }
     });
     (ram, disk)
