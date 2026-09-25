@@ -13,7 +13,7 @@ const steps = ["Your work", "Accounts & usage", "Local assistance", "Ready to be
 export function Setup({ onClose }: { onClose?:()=>void }) {
   const api=useApi(), qc=useQueryClient();
   const state=useQuery({queryKey:["setup"],queryFn:api.setup,refetchInterval:30000});
-  const models=useQuery({queryKey:["models"],queryFn:api.localModels});
+  const models=useQuery({queryKey:["local-models"],queryFn:()=>api.localModels()});
   const [draft,setDraft]=useState<SetupPreferences|null>(null);
   const heading=useRef<HTMLHeadingElement>(null);
   // A finished setup reopens as settings: start at the first page.
