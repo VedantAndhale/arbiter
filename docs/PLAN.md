@@ -57,7 +57,7 @@ After you approve, you are pulled back in only for: scope expansion, budget over
 |---|---|
 | Local intake runtime | Embedded in `arbiterd`, and must feel instant on a Ryzen 7 5850U / 16 GB / Vega 8 |
 | Local models | **T0** model2vec `potion-base-32M` plus trained heads: routing, ambiguity and risk in under 5 ms. **T1** question writer and drafter: on first run, Arbiter benchmarks **LFM2.5-1.2B** and **Granite 4.1-3B** (Q4_K_M) and keeps whichever meets the latency target. Granite (Apache 2.0) is the fallback when LFM's license (free under $10M revenue) doesn't fit. **T2** LFM2.5-2.6B on demand. **T3** frontier model through the harness. |
-| Runtime details | `llama-cpp-2` with JSON-schema constrained decoding through llguidance. The system prompt's KV cache is kept warm so the first token arrives in under 300 ms. Generation runs on the CPU (6 threads); Vulkan is optional and only speeds up prompt processing. Laya is too slow on CPU (190–460 ms) and Jev is API-only, so neither is used. |
+| Runtime details | `llama-cpp-2` with JSON-schema constrained decoding through llguidance. The system prompt's KV cache is kept warm so the first token arrives in under 300 ms. Generation runs on the CPU (AVX2 build, about one thread per core) with prompt-lookup speculative decoding; Vulkan would mainly speed up prompt processing. Laya is too slow on CPU (190–460 ms) and Jev is API-only, so neither is used. |
 | Clarify | Only when T0's ambiguity score is high; at most 4 questions; you can press "Ask me more" |
 | Planner | The local model drafts. Anything bigger than a single small task escalates to a frontier model in read-only plan mode, using your CLI subscription. |
 | Model assignment | Editable strength profiles, adjusted by learned outcome stats. You can override per node. |
@@ -440,7 +440,18 @@ For comparison, Google lists Gemma 4 E2B on a Galaxy S26 Ultra GPU at 3,808 read
 2. **Stream the first question.** Show each question as soon as its JSON object closes, instead of after the whole reply.
 3. **Right model per job.** LFM 2.5 1.2B for anything the user waits on (questions); Granite or Gemma for background jobs (reviews, research, commit messages), where 20–30 s is acceptable. The recommendation uses measured speed per job.
 4. **Start early.** Draft questions while the user is still typing (debounced, cancelled when the text changes), so they are ready at Start.
-5. **GPU for llama.cpp.** A Vulkan build of the runtime, detected at start with a CPU fallback. It needs the Vulkan SDK at build time only. Expect larger gains on newer GPUs than on older integrated graphics.
+5. **GPU for llama.cpp.** A Vulkan build of the runtime, detected at start with a CPU fallback. It needs the Vulkan SDK at build time only. Measured with llama.cpp b11175 on the laptop's integrated Radeon: prompt reading was 4x faster (262 against 65 tokens/s), but writing was about the same (14.4 against 13.3), and speculative decoding gained less than on the CPU. Worth it for long-input jobs (reviews, research); not started.
+8. **Speculative decoding.** **Done (0.1.4):** prompt-lookup drafting in the embedded runtime.
+   - **How it works:** when the last 3 tokens also appear earlier in the reply, or in a JSON-escaped copy of the prompt, up to 4 following tokens are checked in one batch.
+   - **Rollback:** rejected tokens are removed. For hybrid models (Qwen3.5, LFM2), this uses llama.cpp's per-token recurrent snapshots (`n_rs_seq`). Other hybrid architectures (Granite 4) skip speculation.
+   - **Output:** unchanged, because greedy sampling gives the same result.
+   - **Result on local coding steps that rewrite a small file:** Qwen3.5 2B went from 58 s to 35–37 s. Drafts of 8, 12 or adaptive lengths were slower on the CPU, because a batch costs nearly per token.
+   - **Why the escaped copy matters:** code comes back escaped inside JSON strings. Looking drafts up in the raw prompt accepted only 30% of drafts.
+   - **Tested and rejected:** a separate 0.8B draft model (2x slower). MTP heads worked in llama-server (1.6x on edits), but the embedded binding has no MTP support yet.
+9. **CPU build.** **Done (0.1.4):** llama.cpp is built with AVX2/FMA/F16C (`.cargo/config.toml`). Question latency was 18% lower in one run (7.9 s against 9.6 s) and about half in another (5.5 s against 12.1 s); laptop measurements are noisy.
+   - Processors without AVX2 (before about 2013–2015) get a clear message instead of a crash.
+   - Runtime dispatch across CPU variants (`dynamic-backends`, which ships ggml DLLs beside the service) would also cover AVX-512 machines. This is open.
+10. **Local coding step limit.** Raised from 90 s to 180 s for structured jobs, because a file rewrite on a laptop took 60 s before speculation.
 6. **LiteRT-LM backend for Gemma 4 E2B/E4B** (Apache-2.0 models and runtime, ungated on `litert-community`), for machines where it clearly wins: Intel Lunar Lake and newer, AMD Ryzen AI, Apple M-series, NVIDIA GPUs and NPUs.
    - **Detection:** run a short benchmark once per machine, and use LiteRT only where it beats llama.cpp for the job.
    - **Integration:** Google publishes C API prebuilts for Apple platforms. On Windows the runtime ships inside the `litert-lm-api` wheel, so either load its native library directly or wait for Windows C prebuilts. The `litert-lm serve` OpenAI-compatible server is a fallback, but it needs Python and is not acceptable for non-technical users.

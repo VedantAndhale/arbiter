@@ -1,0 +1,9 @@
+# llama.cpp's CPU code is built for AVX2 (x86 processors since about
+# 2013-2015); the runtime refuses older processors with a clear message.
+# Only ggml is affected, not Rust code. Ignored on non-x86 targets.
+[env]
+GGML_AVX = "ON"
+GGML_AVX2 = "ON"
+GGML_FMA = "ON"
+GGML_F16C = "ON"
+GGML_BMI2 = "ON"

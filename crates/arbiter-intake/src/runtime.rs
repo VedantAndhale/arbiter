@@ -6,6 +6,7 @@ use llama_cpp_2::{
     llama_batch::LlamaBatch,
     model::{AddBos, LlamaChatMessage, LlamaModel, params::LlamaModelParams},
     sampling::LlamaSampler,
+    token::LlamaToken,
 };
 use serde_json::json;
 use std::{
@@ -27,6 +28,15 @@ struct Job {
     reply: tokio::sync::oneshot::Sender<Result<Generation>>,
 }
 static WORKER: OnceLock<mpsc::SyncSender<Job>> = OnceLock::new();
+/// Longest a single generation may run. A local coding step that writes a
+/// whole small file needs a few minutes on an ordinary laptop.
+const STEP_LIMIT_SECS: u64 = 180;
+/// Most tokens checked in one speculative batch. On a CPU a batch costs
+/// nearly per token, so short drafts win (measured: 4 beat 8, 12 and
+/// adaptive lengths). Recurrent rollback snapshots must cover it.
+const DRAFT_MAX: usize = 4;
+/// Tokens that must repeat before the following ones are proposed.
+const DRAFT_MATCH: usize = 3;
 /// The model writes only what varies (a heading and the question); the
 /// fixed fields are added afterwards. Writing is the slow part on ordinary
 /// computers, so fewer, shorter questions answer several times faster.
@@ -59,7 +69,7 @@ async fn submit(path: PathBuf, prompt: String, structured: Option<(String, serde
     });
     let (tx, rx) = tokio::sync::oneshot::channel();
     sender.try_send(Job { path, prompt, structured, reply: tx }).map_err(|_| anyhow::anyhow!("local model is busy"))?;
-    tokio::time::timeout(Duration::from_secs(120), rx)
+    tokio::time::timeout(Duration::from_secs(STEP_LIMIT_SECS + 30), rx)
         .await
         .context("local model timed out")?
         .context("local model worker stopped")?
@@ -83,6 +93,10 @@ fn worker(rx: mpsc::Receiver<Job>) {
                 continue;
             }
         };
+        if let Err(e) = cpu_supported() {
+            let _ = job.reply.send(Err(e));
+            continue;
+        }
         let model =
             match LlamaModel::load_from_file(backend, &job.path, &LlamaModelParams::default().with_n_gpu_layers(0)) {
                 Ok(m) => m,
@@ -96,7 +110,10 @@ fn worker(rx: mpsc::Receiver<Job>) {
             .with_n_ctx(NonZeroU32::new(if general { 8192 } else { 2048 }))
             .with_n_batch(512)
             .with_n_threads(generation_threads())
-            .with_n_threads_batch(batch_threads());
+            .with_n_threads_batch(batch_threads())
+            // Recurrent layers keep per-token snapshots so rejected draft
+            // tokens can be undone; llama.cpp ignores this where unsupported.
+            .with_n_rs_seq(DRAFT_MAX as u32 + 1);
         let mut ctx = match model.new_context(backend, params) {
             Ok(c) => c,
             Err(e) => {
@@ -150,10 +167,8 @@ fn infer(
     let template = model.chat_template(None)?;
     let sys = LlamaChatMessage::new("system".into(), structured.map_or(SYSTEM, |s| s.0.as_str()).into())?;
     let system_text = model.apply_chat_template(&template, std::slice::from_ref(&sys), false)?;
-    let user = LlamaChatMessage::new(
-        "user".into(),
-        prompt.chars().take(if structured.is_some() { 12000 } else { 3000 }).collect(),
-    )?;
+    let user_text: String = prompt.chars().take(if structured.is_some() { 12000 } else { 3000 }).collect();
+    let user = LlamaChatMessage::new("user".into(), user_text.clone())?;
     let full = model.apply_chat_template(&template, &[sys, user], true)?;
     let tokens = model.str_to_token(&full, AddBos::Always)?;
     let prefix = model.str_to_token(&system_text, AddBos::Always)?;
@@ -193,22 +208,86 @@ fn infer(
     let mut decoder = encoding_rs::UTF_8.new_decoder();
     let mut text = String::new();
     let mut first_token_ms = 0.0;
-    for index in 0..if structured.is_some() { 1000 } else { 500 } {
-        ensure!(!cancelled(), "request cancelled");
-        ensure!(started.elapsed() < Duration::from_secs(90), "local generation exceeded 90 seconds");
-        let token = sampler.sample(ctx, -1);
-        if index == 0 {
-            first_token_ms = started.elapsed().as_secs_f64() * 1000.0;
-        }
+    let limit = if structured.is_some() { 1000 } else { 500 };
+    let deadline = Duration::from_secs(if structured.is_some() { STEP_LIMIT_SECS } else { 90 });
+    // Code and text copied from the prompt come back inside JSON strings,
+    // escaped, so drafts are also looked up in an escaped copy of it.
+    let escaped = match structured {
+        Some(_) => model.str_to_token(&serde_json::to_string(&user_text)?, AddBos::Never)?,
+        None => Vec::new(),
+    };
+    let speculate = can_roll_back(model);
+    let mut history = tokens.clone();
+    // Next position to fill, the batch index holding the logits to sample
+    // from, and a token already chosen while checking drafts.
+    let mut pos = tokens.len();
+    let mut logits = -1;
+    let mut pending: Option<LlamaToken> = None;
+    let mut produced = 0;
+    // Adds one chosen token; true once the response is complete.
+    let mut take = |token: LlamaToken, text: &mut String| -> Result<bool> {
         if model.is_eog_token(token) {
-            break;
+            return Ok(true);
         }
         text.push_str(&model.token_to_piece(token, &mut decoder, true, None)?);
-        // sample() already accepts the token; accepting twice corrupts grammar state.
-        if serde_json::from_str::<serde_json::Value>(&text).is_ok() {
+        Ok(serde_json::from_str::<serde_json::Value>(text).is_ok())
+    };
+    'generate: while produced < limit {
+        ensure!(!cancelled(), "request cancelled");
+        ensure!(started.elapsed() < deadline, "local generation exceeded {} seconds", deadline.as_secs());
+        // sample() also advances the grammar; each chosen token is sampled once.
+        let token = match pending.take() {
+            Some(t) => t,
+            None => {
+                produced += 1;
+                sampler.sample(ctx, logits)
+            }
+        };
+        if produced == 1 {
+            first_token_ms = started.elapsed().as_secs_f64() * 1000.0;
+        }
+        if take(token, &mut text)? {
             break;
         }
-        decode(ctx, &[token], tokens.len() + index)?;
+        history.push(token);
+        let drafts = if speculate { draft(&history, &escaped, DRAFT_MAX.min(limit - produced)) } else { Vec::new() };
+        if drafts.is_empty() {
+            decode(ctx, &[token], pos)?;
+            pos += 1;
+            logits = -1;
+            continue;
+        }
+        // Prompt lookup: check the token and its likely continuation in one
+        // batch. Greedy sampling keeps the result identical to one at a time.
+        let mut batch = LlamaBatch::new(drafts.len() + 1, 1);
+        for (i, t) in std::iter::once(token).chain(drafts.iter().copied()).enumerate() {
+            batch.add(t, (pos + i) as i32, &[0], true)?;
+        }
+        ctx.decode(&mut batch)?;
+        let mut kept = 1;
+        for (i, &proposed) in drafts.iter().enumerate() {
+            let chosen = sampler.sample(ctx, i as i32);
+            produced += 1;
+            if chosen != proposed {
+                pending = Some(chosen);
+                break;
+            }
+            if take(chosen, &mut text)? {
+                break 'generate;
+            }
+            history.push(chosen);
+            kept += 1;
+        }
+        if pending.is_some() {
+            ensure!(
+                ctx.clear_kv_cache_seq(Some(0), Some((pos + kept) as u32), None)?,
+                "local model could not undo rejected draft tokens"
+            );
+            logits = -1;
+        } else {
+            logits = drafts.len() as i32;
+        }
+        pos += kept;
     }
     let value = serde_json::from_str::<serde_json::Value>(&text).context("model did not finish its JSON response")?;
     let text = if structured.is_some() { text } else { expand_questions(&value).to_string() };
@@ -249,6 +328,48 @@ fn expand_questions(compact: &serde_json::Value) -> serde_json::Value {
     json!({ "questions": questions })
 }
 
+/// Tokens that followed the latest earlier occurrence of the last few,
+/// searching the text written so far and then `extra`. Copied text (paths,
+/// hashes, code being edited, repeated JSON) makes these match often, and one
+/// batch checks them all.
+fn draft(history: &[LlamaToken], extra: &[LlamaToken], max: usize) -> Vec<LlamaToken> {
+    if max == 0 || history.len() < DRAFT_MATCH {
+        return Vec::new();
+    }
+    let tail = &history[history.len() - DRAFT_MATCH..];
+    // Latest match starting before `last`.
+    let follow = |source: &[LlamaToken], last: usize| {
+        (0..last).rev().find(|&start| &source[start..start + DRAFT_MATCH] == tail).and_then(|start| {
+            let from = start + DRAFT_MATCH;
+            (from < source.len()).then(|| source[from..(from + max).min(source.len())].to_vec())
+        })
+    };
+    follow(history, history.len() - DRAFT_MATCH)
+        .or_else(|| follow(extra, (extra.len() + 1).saturating_sub(DRAFT_MATCH)))
+        .unwrap_or_default()
+}
+
+/// Rejected draft tokens must be removable. Attention caches always allow
+/// it; recurrent layers only on architectures with rollback snapshots.
+fn can_roll_back(model: &LlamaModel) -> bool {
+    if !model.is_recurrent() && !model.is_hybrid() {
+        return true;
+    }
+    let arch = model.meta_val_str("general.architecture").unwrap_or_default();
+    matches!(arch.as_str(), "qwen35" | "qwen35moe" | "lfm2" | "lfm2moe" | "nemotron_h" | "nemotron_h_moe")
+}
+
+/// The bundled runtime is built for AVX2 (every x86 processor since about
+/// 2013-2015). Refuse clearly instead of crashing on older ones.
+fn cpu_supported() -> Result<()> {
+    #[cfg(target_arch = "x86_64")]
+    ensure!(
+        std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("fma"),
+        "this processor lacks AVX2, which local models need; use a cloud model instead"
+    );
+    Ok(())
+}
+
 fn logical_cpus() -> i32 {
     std::thread::available_parallelism().map_or(4, |n| n.get() as i32)
 }
@@ -267,6 +388,20 @@ fn batch_threads() -> i32 {
 
 #[cfg(test)]
 mod compact_tests {
+    use super::{LlamaToken, draft};
+
+    #[test]
+    fn drafts_continue_the_latest_repeat() {
+        let t = |ids: &[i32]| ids.iter().map(|&i| LlamaToken(i)).collect::<Vec<_>>();
+        assert_eq!(draft(&t(&[1, 2, 3, 4, 5, 9, 1, 2, 3]), &[], 4), t(&[4, 5, 9, 1]));
+        assert_eq!(draft(&t(&[1, 2, 3, 7, 1, 2, 3, 8, 1, 2, 3]), &[], 1), t(&[8]));
+        assert!(draft(&t(&[1, 2, 3, 4]), &[], 4).is_empty());
+        assert!(draft(&t(&[1, 2, 3, 1, 2, 3]), &[], 0).is_empty());
+        // Falls back to the extra source, and a match at its very end has no continuation.
+        assert_eq!(draft(&t(&[5, 1, 2, 3]), &t(&[1, 2, 3, 6, 7]), 4), t(&[6, 7]));
+        assert!(draft(&t(&[5, 1, 2, 3]), &t(&[9, 1, 2, 3]), 4).is_empty());
+    }
+
     #[test]
     fn compact_questions_become_full_cards() {
         let v = serde_json::json!({"questions":[{"header":"Data sources","question":"Where does the data come from?"},{"header":"Data sources","question":"Which charts?"}]});

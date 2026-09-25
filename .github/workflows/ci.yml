@@ -38,6 +38,9 @@ jobs:
           brew install llvm
           echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@v2
+        with:
+          # Bump when .cargo/config.toml build settings change.
+          prefix-key: v1-avx2
       - name: Frontend dist placeholder for tauri::generate_context!
         shell: bash
         run: mkdir -p apps/desktop/dist && touch apps/desktop/dist/index.html
@@ -95,6 +98,9 @@ jobs:
           python -m pip install --target target/intake-tooling libclang==18.1.1
           "LIBCLANG_PATH=$pwd/target/intake-tooling/clang/native" >> $env:GITHUB_ENV
       - uses: Swatinem/rust-cache@v2
+        with:
+          # Bump when .cargo/config.toml build settings change.
+          prefix-key: v1-avx2
       - name: Build the background service
         shell: bash
         run: |

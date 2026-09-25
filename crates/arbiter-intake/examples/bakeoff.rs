@@ -1,5 +1,6 @@
 //! Compare local models on Arbiter's own jobs with the embedded runtime:
-//! clarifying questions (the user waits) and a commit message (background).
+//! clarifying questions (the user waits), a commit message (background) and
+//! local coding steps that copy and change a file.
 //! Usage: cargo run --release -p arbiter-intake --example bakeoff -- <model.gguf>...
 use arbiter_intake::runtime;
 use serde_json::json;
@@ -19,6 +20,13 @@ const TASKS: [&str; 10] = [
 ];
 
 const COMMIT_INPUT: &str = r#"{"task":"CSV export","commits":"- wip 1\n- add export button\n- wip 2\n- handle empty orders\n","summaries":"- Added an Export CSV button to the orders page.\n- Exports respect the current filters and handle empty results.","diff_stat":" src/orders/export.ts | 64 +++++\n src/orders/OrdersPage.tsx | 12 +-\n 2 files changed, 72 insertions(+), 4 deletions(-)"}"#;
+
+const CART: &str = include_str!("sample_cart.ts");
+const CODING_SYSTEM: &str = "You are a local coding agent. Return exactly one JSON action. write: replace a small file with its full new content; before_hash is the hash from your read. Keep changes minimal.";
+const EDITS: [(&str, &str, &str); 2] = [
+    ("Rename the function formatPrice to formatMoney everywhere in src/cart.ts.", "formatMoney", "formatPrice"),
+    ("In src/cart.ts, make applyDiscount throw an Error when percent is negative.", "throw", "\0"),
+];
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -67,6 +75,28 @@ async fn main() -> anyhow::Result<()> {
             Ok(g) => println!("commit message ({:.1} s): {}", g.total_ms / 1000.0, g.text.replace('\n', " ")),
             Err(e) => println!("commit message error: {e:#}"),
         }
+        let schema = json!({"type":"object","additionalProperties":false,"required":["action","path","before_hash","content","summary"],"properties":{
+            "action":{"enum":["read","edit","write","done"]},"path":{"type":"string","maxLength":240},
+            "before_hash":{"type":"string","maxLength":64},"content":{"type":"string","maxLength":6000},
+            "summary":{"type":"string","maxLength":1000}}});
+        let (mut total, mut correct) = (0f64, 0);
+        for (task, want, gone) in EDITS {
+            let prompt = format!(
+                "Task: {task}\nUse action write with the complete updated file.\nLatest read of src/cart.ts (hash 9f2c4e7a1b3d5f60718293a4b5c6d7e8f9012345678abcdef0123456789abcd):\n{CART}"
+            );
+            match runtime::structured(path.clone(), prompt, CODING_SYSTEM.into(), schema.clone()).await {
+                Ok(g) => {
+                    total += g.total_ms;
+                    let v: serde_json::Value = serde_json::from_str(&g.text)?;
+                    let content = v["content"].as_str().unwrap_or("");
+                    let ok = content.contains(want) && !content.contains(gone) && content.len() > CART.len() / 2;
+                    correct += usize::from(ok);
+                    println!("  {:>5.1} s | {} | {task}", g.total_ms / 1000.0, if ok { "correct" } else { "WRONG" });
+                }
+                Err(e) => println!("  coding error on {task:?}: {e:#}"),
+            }
+        }
+        println!("coding: {correct}/2 correct, average {:.1} s", total / 2000.0);
     }
     Ok(())
 }
