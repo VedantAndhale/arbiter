@@ -124,8 +124,14 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/ws", get(ws))
         .route_layer(middleware::from_fn_with_state(state.clone(), auth));
     Router::new()
-        // The version lets a newer app replace an older background service.
-        .route("/v1/health", get(|| async { Json(json!({ "ok": true, "version": env!("CARGO_PKG_VERSION") })) }))
+        // The version lets a newer app replace an older background service;
+        // the pid lets a client reject a daemon.json left by a previous run.
+        .route(
+            "/v1/health",
+            get(|| async {
+                Json(json!({ "ok": true, "version": env!("CARGO_PKG_VERSION"), "pid": std::process::id() }))
+            }),
+        )
         .merge(authed)
         .layer(cors())
         .with_state(state)

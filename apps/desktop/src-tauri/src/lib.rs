@@ -18,7 +18,10 @@ async fn healthy(info: &DaemonInfo) -> bool {
     health(info).await.is_some()
 }
 
-/// The running daemon's version, if it answers.
+/// The running daemon's version, if it answers and is the daemon that wrote
+/// `daemon.json`. A new daemon opens its port a moment before it rewrites the
+/// file; in that window the file still holds the previous run's token, so a
+/// pid mismatch means "not ready yet", not "healthy".
 async fn health(info: &DaemonInfo) -> Option<String> {
     let client = reqwest::Client::builder().timeout(Duration::from_millis(800)).build().ok()?;
     let r = client.get(format!("{}/v1/health", info.base_url())).send().await.ok()?;
@@ -26,6 +29,9 @@ async fn health(info: &DaemonInfo) -> Option<String> {
         return None;
     }
     let v: serde_json::Value = r.json().await.ok()?;
+    if v["pid"].as_u64().is_some_and(|pid| pid != u64::from(info.pid)) {
+        return None;
+    }
     Some(v["version"].as_str().unwrap_or("").to_owned())
 }
 

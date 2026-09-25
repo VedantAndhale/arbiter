@@ -140,9 +140,11 @@ export function ModelDialog({ onClose }: { onClose: () => void }) {
         {progress?.phase === "benchmarking" && <p role="status" className="my-2 text-dim">Benchmarking on this computer…</p>}
         {progress?.phase === "downloading" && <Button disabled={cancel.isPending} onClick={()=>cancel.mutate(m.id)}>Cancel download</Button>}
         {progress?.phase === "cancelling" && <p role="status">Cancelling download…</p>}
-        {benchmark && <p className={`my-2 text-[12px] ${benchmark.meets_target ? "text-ok" : "text-warn"}`}>{benchmark.meets_target
-          ? `Fast enough for questions on this computer (${seconds(benchmark.complete_ms)}).`
-          : `Too slow for questions before each task (${seconds(benchmark.complete_ms)}; under ${seconds(benchmark.target_ms)} is needed). It is still used for reviews, research and commit messages, which run in the background.`}</p>}
+        {benchmark && m.id !== "potion" && <p className={`my-2 text-[12px] ${benchmark.complete_ms <= 12_000 ? "text-ok" : "text-warn"}`}>{benchmark.complete_ms <= 5_000
+          ? `Fast: questions appear almost at once on this computer (${seconds(benchmark.complete_ms)}).`
+          : benchmark.complete_ms <= 12_000
+          ? `Good: questions arrive about ${seconds(benchmark.complete_ms)} after you press Start on this computer.`
+          : `Too slow for questions before each task here (${seconds(benchmark.complete_ms)}). It is still used for reviews, research and commit messages, which run in the background.`}</p>}
         {progress?.error && <p role="alert" className="my-2 text-[12px] text-bad">{progress.error}</p>}
         <div className="mt-2 flex flex-wrap gap-2"><Button disabled={busy || action.isPending || (!ready && m.license === "lfm1.0" && !license)} onClick={() => action.mutate({ id: m.id, op: ready ? "benchmark" : "install" })}>{busy ? "Working…" : ready ? "Run benchmark" : "Download and set up"}</Button>
           {ready && m.id !== "potion" && models.data?.selected !== m.id && <Button disabled={busy || action.isPending} onClick={() => action.mutate({ id: m.id, op: "select" })}>Use for questions</Button>}

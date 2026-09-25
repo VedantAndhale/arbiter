@@ -47,6 +47,16 @@ pub struct Progress {
     pub error: Option<String>,
 }
 
+/// Longest acceptable wait for questions before a task (measured, warm).
+pub const QUESTION_TARGET_MS: f64 = 12_000.0;
+/// Question models from best to simplest, from Arbiter's own comparison
+/// (docs/PLAN.md, "Local intelligence"). Speed only decides whether a model
+/// qualifies; among those that do, quality wins.
+const QUALITY: [&str; 4] = ["lfm-8b", "qwen", "granite", "lfm"];
+fn quality_rank(id: &str) -> usize {
+    QUALITY.iter().position(|q| *q == id).unwrap_or(QUALITY.len())
+}
+
 pub fn catalog() -> Vec<Model> {
     serde_json::from_str(include_str!("catalog.json")).expect("embedded model catalog")
 }
@@ -139,10 +149,11 @@ impl Manager {
                 let benchmark: Benchmark =
                     serde_json::from_slice(&std::fs::read(self.root.join(&model.id).join("benchmark.json")).ok()?)
                         .ok()?;
-                benchmark.meets_target.then_some((model, benchmark.complete_ms))
+                // Judge by the current limit, not the stored flag, so older
+                // results follow a changed target without re-measuring.
+                (benchmark.complete_ms <= QUESTION_TARGET_MS).then_some(model)
             })
-            .min_by(|a, b| a.1.total_cmp(&b.1))
-            .map(|(model, _)| model)
+            .min_by_key(|model| quality_rank(&model.id))
     }
 
     pub fn select(&self, id: &str) -> Result<()> {
@@ -379,7 +390,7 @@ impl Manager {
         }
         // Questions appear before a task starts, so a few seconds is the
         // most anyone should wait; the classifier must be near-instant.
-        let target = if id == "potion" { 5.0 } else { 5000.0 };
+        let target = if id == "potion" { 5.0 } else { QUESTION_TARGET_MS };
         let result = Benchmark {
             first_token_ms: first,
             complete_ms: total,
@@ -410,11 +421,9 @@ impl Manager {
                 && id != "potion"
                 && b.meets_target
             {
-                let current = manager
-                    .selected()
-                    .and_then(|m| std::fs::read(manager.root.join(m.id).join("benchmark.json")).ok())
-                    .and_then(|v| serde_json::from_slice::<Benchmark>(&v).ok());
-                if current.is_none_or(|old| b.complete_ms <= old.complete_ms) {
+                // A newly measured model that qualifies replaces the current
+                // one only if it is better, not merely faster.
+                if manager.selected().is_none_or(|m| quality_rank(&id) < quality_rank(&m.id)) {
                     let _ = manager.select(&id);
                 }
             }

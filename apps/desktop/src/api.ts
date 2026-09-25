@@ -399,6 +399,9 @@ export class Api {
   saveSetup = (p:SetupPreferences) => this.req<SetupState>("/v1/setup", {method:"POST",body:JSON.stringify(p)});
   refreshSetup = () => this.req<SetupState>("/v1/setup/refresh", {method:"POST"});
 
+  /** Finds the daemon again (for example after it restarted with a new token). */
+  reconnect?: () => Promise<Connection>;
+
   constructor(private conn: Connection) {}
 
   /** WebSocket address of a task's terminal (browsers cannot set headers). */
@@ -411,7 +414,7 @@ export class Api {
 
   /** `slow` is for work done by a local model, which can take minutes on
    *  an ordinary computer; everything else answers within two minutes. */
-  private async req<T>(path: string, init?: RequestInit & { text?: boolean; slow?: boolean }): Promise<T> {
+  private async req<T>(path: string, init?: RequestInit & { text?: boolean; slow?: boolean; retried?: boolean }): Promise<T> {
 
     const limit = init?.slow ? 20 * 60_000 : 120_000;
     let res: Response;
@@ -430,6 +433,13 @@ export class Api {
       throw new Error("Can't reach Arbiter's background service. If you closed it, start Arbiter again.");
     }
 
+    // A restarted background service has a new token: pick it up and retry once.
+    if (res.status === 401 && this.reconnect && !init?.retried) {
+      try {
+        this.conn = await this.reconnect();
+        return this.req<T>(path, { ...init, retried: true });
+      } catch { /* fall through to the error below */ }
+    }
     if (!res.ok) {
 
       const body = await res.json().catch(() => ({}));

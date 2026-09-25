@@ -25,7 +25,7 @@ export default function App() {
 
   useEffect(() => {
     connect()
-      .then((c) => setApi(new Api(c)))
+      .then((c) => { const a = new Api(c); a.reconnect = connect; setApi(a); })
       .catch((e) => setError(String(e?.message ?? e)));
   }, []);
 

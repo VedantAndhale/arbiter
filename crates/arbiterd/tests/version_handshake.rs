@@ -15,6 +15,8 @@ async fn health_reports_version_and_shutdown_needs_the_token() {
     let health: Value = http.get(format!("{base}/v1/health")).send().await.unwrap().json().await.unwrap();
     assert_eq!(health["ok"], true);
     assert_eq!(health["version"], env!("CARGO_PKG_VERSION"));
+    // The pid lets a client reject a daemon.json left by a previous run.
+    assert_eq!(health["pid"], std::process::id());
     let r = http.post(format!("{base}/v1/shutdown")).send().await.unwrap();
     assert_eq!(r.status(), 401);
     daemon.handle.abort();
