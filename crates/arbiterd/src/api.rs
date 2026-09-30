@@ -67,6 +67,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/models/{id}/cancel", post(cancel_model))
         .route("/v1/models/{id}/benchmark", post(benchmark_model))
         .route("/v1/models/{id}/select", post(select_model))
+        .route("/v1/intake/draft", post(draft_questions))
         .route("/v1/projects/{id}/files", get(project_files))
         .route("/v1/threads/{id}/answers", post(answer_intake))
         .route("/v1/threads/{id}/intake", axum::routing::patch(correct_intake))
@@ -528,6 +529,16 @@ async fn benchmark_model(State(s): State<AppState>, Path(id): Path<String>) -> A
 async fn select_model(State(s): State<AppState>, Path(id): Path<String>) -> ApiResult {
     s.inner.intake.select(&id)?;
     Ok(Json(s.inner.intake.status()))
+}
+#[derive(Deserialize)]
+struct DraftRequest {
+    text: String,
+}
+/// Called while the user types; questions are drafted locally in the
+/// background and reused if Start is pressed with the same text.
+async fn draft_questions(State(s): State<AppState>, Json(r): Json<DraftRequest>) -> ApiResult {
+    s.inner.intake.draft_questions(&r.text);
+    Ok(Json(json!({ "ok": true })))
 }
 #[derive(Deserialize)]
 struct IntakeAnswers {

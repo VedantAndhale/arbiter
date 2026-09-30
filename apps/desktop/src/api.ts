@@ -503,6 +503,7 @@ export class Api {
   interrupt = (id: string) => this.req<unknown>(`/v1/threads/${id}/interrupt`, { method: "POST", body: "{}" });
 
   localModels = () => this.req<LocalModels>("/v1/models");
+  draftQuestions = (text: string) => this.req<unknown>("/v1/intake/draft", { method: "POST", body: JSON.stringify({ text }) });
   localCapability = () => this.req<LocalCapabilityReport>("/v1/local/capability");
   checkLocalCapability = (model: string) => this.req<LocalCapability>("/v1/local/capability", { method: "POST", body: JSON.stringify({ model }), slow: true });
   review = (id: string, comments: ReviewComment[], revision?: number) => this.req<{ kind: "plan" | "message" }>(`/v1/threads/${id}/review`, { method: "POST", body: JSON.stringify({ comments, revision }) });

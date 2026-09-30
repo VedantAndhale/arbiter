@@ -57,6 +57,14 @@ export function Draft({ projects, initialProject, onAddProject, onCreated }: { p
     },
   });
   const busy = create.isPending || comparison.isPending;
+  // Draft the clarifying questions locally once typing pauses, so they are
+  // ready the moment Start is pressed. The daemon keeps only the latest text.
+  const request = text.trim();
+  useEffect(() => {
+    if (compare || request.length < 12 || request.startsWith("/")) return;
+    const timer = setTimeout(() => { api.draftQuestions(request).catch(() => {}); }, 1200);
+    return () => clearTimeout(timer);
+  }, [api, compare, request]);
   const submit = () => {
     if (!text.trim() || busy || uploads.blocked) return;
     if (!projectId) { setAskProject(true); return; }

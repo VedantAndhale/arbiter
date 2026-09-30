@@ -68,7 +68,18 @@ pub struct Manager {
     classifier: Arc<Mutex<Option<(Classifier, Instant)>>>,
     last_error: Arc<Mutex<Option<String>>>,
     cancellations: Arc<Mutex<HashMap<String, Arc<std::sync::atomic::AtomicBool>>>>,
+    draft: Arc<Mutex<Option<Draft>>>,
 }
+
+/// Questions drafted while the user is still typing, for one exact request.
+struct Draft {
+    text: String,
+    ready: tokio::sync::watch::Receiver<Option<Vec<Question>>>,
+    task: tokio::task::AbortHandle,
+}
+
+/// Requests shorter than this are still being typed; nothing to draft yet.
+const DRAFT_MIN_CHARS: usize = 12;
 
 impl Manager {
     /// Explicit model choice for coding/review. Downloaded question models are
@@ -116,6 +127,7 @@ impl Manager {
             classifier: Default::default(),
             last_error: Default::default(),
             cancellations: Default::default(),
+            draft: Default::default(),
         }
     }
 
@@ -332,7 +344,55 @@ impl Manager {
         }
     }
 
+    /// Start drafting the first questions for `text` in the background, so
+    /// they are ready when the user presses Start. A newer text cancels the
+    /// previous draft, which also frees the local model.
+    pub fn draft_questions(&self, text: &str) {
+        let text = text.trim();
+        if text.chars().count() < DRAFT_MIN_CHARS || text.len() > 3000 {
+            return;
+        }
+        let mut slot = self.draft.lock().unwrap();
+        if slot.as_ref().is_some_and(|d| d.text == text) {
+            return;
+        }
+        if let Some(old) = slot.take() {
+            old.task.abort();
+        }
+        let (tx, ready) = tokio::sync::watch::channel(None);
+        let (manager, request) = (self.clone(), text.to_owned());
+        let task = tokio::spawn(async move {
+            let assessment = manager.assess(request.clone()).await;
+            let cards = manager.generate_questions(&request, &assessment, false).await;
+            let _ = tx.send(Some(cards));
+        })
+        .abort_handle();
+        *slot = Some(Draft { text: text.to_owned(), ready, task });
+    }
+
+    /// The draft for exactly `text`, if one exists. Any other draft is
+    /// cancelled: the user started something else.
+    fn take_draft(&self, text: &str) -> Option<tokio::sync::watch::Receiver<Option<Vec<Question>>>> {
+        let draft = self.draft.lock().unwrap().take()?;
+        if draft.text == text.trim() {
+            Some(draft.ready)
+        } else {
+            draft.task.abort();
+            None
+        }
+    }
+
     pub async fn questions(&self, text: &str, assessment: &Assessment, more: bool) -> Vec<Question> {
+        if !more
+            && let Some(mut ready) = self.take_draft(text)
+            && let Ok(cards) = ready.wait_for(Option::is_some).await
+        {
+            return cards.clone().unwrap_or_default();
+        }
+        self.generate_questions(text, assessment, more).await
+    }
+
+    async fn generate_questions(&self, text: &str, assessment: &Assessment, more: bool) -> Vec<Question> {
         if assessment.ambiguity < 0.6 && !more {
             return vec![];
         }
@@ -454,6 +514,28 @@ fn verify_file(path: &Path, expected: &str) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn drafted_questions_are_reused_once_for_the_same_text() {
+        let root = tempfile::tempdir().unwrap();
+        let manager = Manager::new(root.path().into());
+        let text = "Build a dashboard";
+        manager.draft_questions("short");
+        assert!(manager.draft.lock().unwrap().is_none(), "text still being typed is not drafted");
+        manager.draft_questions(&format!("  {text}  "));
+        let assessment = manager.assess(text.into()).await;
+        let direct = manager.generate_questions(text, &assessment, false).await;
+        assert_eq!(
+            serde_json::to_value(manager.questions(text, &assessment, false).await).unwrap(),
+            serde_json::to_value(&direct).unwrap()
+        );
+        assert!(manager.draft.lock().unwrap().is_none(), "a draft is used once");
+
+        // A different request cancels the draft instead of waiting for it.
+        manager.draft_questions("Add dark mode to settings");
+        manager.questions(text, &assessment, false).await;
+        assert!(manager.draft.lock().unwrap().is_none());
+    }
     #[tokio::test]
     async fn resumes_partial_model_and_cancellation_preserves_it() {
         let root = tempfile::tempdir().unwrap();
