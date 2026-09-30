@@ -58,11 +58,16 @@ export function Draft({ projects, initialProject, onAddProject, onCreated }: { p
   });
   const busy = create.isPending || comparison.isPending;
   // Draft the clarifying questions locally once typing pauses, so they are
-  // ready the moment Start is pressed. The daemon keeps only the latest text.
+  // ready the moment Start is pressed. The daemon keeps only the latest text
+  // and cancels older drafts, so short pauses are cheap.
+  // Pasted text is usually complete, so it is drafted at once.
   const request = text.trim();
+  const pasted = useRef(false);
   useEffect(() => {
+    const now = pasted.current;
+    pasted.current = false;
     if (compare || request.length < 12 || request.startsWith("/")) return;
-    const timer = setTimeout(() => { api.draftQuestions(request).catch(() => {}); }, 1200);
+    const timer = setTimeout(() => { api.draftQuestions(request).catch(() => {}); }, now ? 0 : 700);
     return () => clearTimeout(timer);
   }, [api, compare, request]);
   const submit = () => {
@@ -95,7 +100,7 @@ export function Draft({ projects, initialProject, onAddProject, onCreated }: { p
             placeholder="What should change?  @ for a project or file · / for commands"
             value={text}
             onChange={(e) => { setText(e.target.value); track(); }}
-            onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); uploads.add(e.clipboardData.files); } }}
+            onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); uploads.add(e.clipboardData.files); } else pasted.current = true; }}
             onSelect={track}
             onClick={track}
             onKeyUp={track}
