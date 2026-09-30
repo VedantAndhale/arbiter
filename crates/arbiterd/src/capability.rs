@@ -6,8 +6,9 @@ use anyhow::{Context, Result, ensure};
 use serde_json::{Value, json};
 use std::{path::Path, time::Instant};
 
-/// Bump when the tasks change, so old results stop counting.
-const PROBE_VERSION: u64 = 1;
+/// Bump when the tasks or the local agent's action format change, so old
+/// results stop counting. 2: one JSON shape per action.
+const PROBE_VERSION: u64 = 2;
 const PROBE_STEPS: usize = 12;
 const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(180);
 

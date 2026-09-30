@@ -85,5 +85,20 @@
         "bytes": 5155564768
       }
     ]
+  },
+  {
+    "id": "qwen-4b",
+    "name": "Qwen3.5 4B",
+    "repository": "unsloth/Qwen3.5-4B-GGUF",
+    "revision": "e87f176479d0855a907a41277aca2f8ee7a09523",
+    "license": "apache-2.0",
+    "files": [
+      {
+        "name": "Qwen3.5-4B-Q4_K_M.gguf",
+        "url": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf",
+        "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+        "bytes": 2740937888
+      }
+    ]
   }
 ]

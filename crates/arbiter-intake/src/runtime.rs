@@ -230,6 +230,7 @@ fn infer(
             return Ok(true);
         }
         text.push_str(&model.token_to_piece(token, &mut decoder, true, None)?);
+        ensure!(!repeating(text), "{REPEATED}");
         Ok(serde_json::from_str::<serde_json::Value>(text).is_ok())
     };
     'generate: while produced < limit {
@@ -258,7 +259,8 @@ fn infer(
             continue;
         }
         // Prompt lookup: check the token and its likely continuation in one
-        // batch. Greedy sampling keeps the result identical to one at a time.
+        // batch. Greedy sampling gives the same result as one at a time, apart
+        // from rare near-ties where batched arithmetic rounds differently.
         let mut batch = LlamaBatch::new(drafts.len() + 1, 1);
         for (i, t) in std::iter::once(token).chain(drafts.iter().copied()).enumerate() {
             batch.add(t, (pos + i) as i32, &[0], true)?;
@@ -328,6 +330,21 @@ fn expand_questions(compact: &serde_json::Value) -> serde_json::Value {
     json!({ "questions": questions })
 }
 
+/// Error text for a reply stuck in a loop; callers may retry the step.
+pub const REPEATED: &str = "local model repeated itself";
+
+/// True when the text ends with the same block four times in a row. Greedy
+/// decoding on small models can loop until the output limit; stopping early
+/// saves minutes. Blocks shorter than 24 bytes are ignored, since short
+/// repeats (indentation, separators, data) are normal.
+fn repeating(text: &str) -> bool {
+    let b = text.as_bytes();
+    (24..=b.len().min(1600) / 4).any(|p| {
+        let tail = &b[b.len() - p..];
+        (2..=4).all(|k| &b[b.len() - k * p..b.len() - (k - 1) * p] == tail)
+    })
+}
+
 /// Tokens that followed the latest earlier occurrence of the last few,
 /// searching the text written so far and then `extra`. Copied text (paths,
 /// hashes, code being edited, repeated JSON) makes these match often, and one
@@ -388,7 +405,19 @@ fn batch_threads() -> i32 {
 
 #[cfg(test)]
 mod compact_tests {
-    use super::{LlamaToken, draft};
+    use super::{LlamaToken, draft, repeating};
+
+    #[test]
+    fn loops_are_caught_but_normal_code_is_not() {
+        let line = "    print(greet(\\\"Alice\\\"))\n";
+        assert!(repeating(&format!("{{\"content\":\"def f():\n{}", line.repeat(4))));
+        assert!(!repeating(&format!("{{\"content\":\"def f():\n{}", line.repeat(3))));
+        assert!(!repeating(
+            "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0"
+        ));
+        let code = "def add(a, b):\n    return a + b\n\ndef mul(a, b):\n    return a * b\n";
+        assert!(!repeating(code));
+    }
 
     #[test]
     fn drafts_continue_the_latest_repeat() {

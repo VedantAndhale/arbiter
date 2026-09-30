@@ -236,15 +236,26 @@ impl AppState {
         let mut evidence = String::new();
         let mut history: std::collections::VecDeque<String> = Default::default();
         let mut attempts: std::collections::HashMap<String, usize> = Default::default();
-        let (mut documentation_calls, mut check_calls) = (0, 0);
+        let (mut documentation_calls, mut check_calls, mut loops) = (0, 0, 0);
         for step in 0..LOCAL_STEPS {
             let recent = history.iter().cloned().collect::<Vec<_>>().join("\n");
             let prompt = format!(
                 "{goal}\nChanged files: {}\nSteps so far (oldest first):\n{recent}\nLatest tool result:\n{evidence}",
                 session.changed.join(", ")
             );
-            let output =
-                self.local_generate(model, prompt, arbiter_local::SYSTEM.into(), arbiter_local::schema()).await?;
+            let output = match self
+                .local_generate(model, prompt, arbiter_local::SYSTEM.into(), arbiter_local::schema())
+                .await
+            {
+                Ok(o) => o,
+                // A looping reply is retried with a note, twice at most.
+                Err(e) if format!("{e:#}").contains(arbiter_intake::runtime::REPEATED) && loops < 2 => {
+                    loops += 1;
+                    evidence = json!({"error":"your last reply repeated the same text; reply with one short action and write only what the task needs"}).to_string();
+                    continue;
+                }
+                Err(e) => return Err(e),
+            };
             let action: arbiter_local::Action =
                 serde_json::from_str(&output).context("local model returned invalid action")?;
             // A model stuck on one failing attempt wastes the whole budget.

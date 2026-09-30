@@ -10,6 +10,7 @@ MODELS = [
     ("granite", "Granite 4.1 3B", "ibm-granite/granite-4.1-3b-GGUF", "apache-2.0", ["granite-4.1-3b-Q4_K_M.gguf"]),
     ("qwen", "Qwen3.5 2B", "unsloth/Qwen3.5-2B-GGUF", "apache-2.0", ["Qwen3.5-2B-Q4_K_M.gguf"]),
     ("lfm-8b", "LFM2.5 8B-A1B", "LiquidAI/LFM2.5-8B-A1B-GGUF", "lfm1.0", ["LFM2.5-8B-A1B-Q4_K_M.gguf"]),
+    ("qwen-4b", "Qwen3.5 4B", "unsloth/Qwen3.5-4B-GGUF", "apache-2.0", ["Qwen3.5-4B-Q4_K_M.gguf"]),
 ]
 
 catalog = []

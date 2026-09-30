@@ -106,14 +106,15 @@ export function ModelDialog({ onClose }: { onClose: () => void }) {
   const capability = useQuery({ queryKey: ["local-capability"], queryFn: api.localCapability });
   const setup = useQuery({ queryKey: ["setup"], queryFn: api.setup });
   // The best model this computer runs comfortably. Order by quality, from
-  // measurements on Arbiter's own jobs (docs/PLAN.md, 2026-09-25): LFM2.5
-  // 8B-A1B, Qwen3.5 2B, Granite 4.1 3B, LFM2.5 1.2B. Each needs enough
-  // memory and disk, and is skipped if it measured too slow here.
+  // measurements on Arbiter's own jobs (docs/PLAN.md, 2026-09-30): Qwen3.5
+  // 4B (the only one passing the coding check), LFM2.5 8B-A1B, Qwen3.5 2B,
+  // Granite 4.1 3B, LFM2.5 1.2B. Each needs enough memory and disk, and is
+  // skipped if it measured too slow here.
   const hw = setup.data?.hardware;
   const gb = (b?: number | null) => (b ?? 0) / 2 ** 30;
   const sizeGb = (id: string) => gb(models.data?.models.find(m => m.model.id === id)?.model.files.reduce((n, f) => n + f.bytes, 0));
-  const minMemory: Record<string, number> = { "lfm-8b": 32, qwen: 8, granite: 12, lfm: 0 };
-  const order = ["lfm-8b", "qwen", "granite", "lfm"];
+  const minMemory: Record<string, number> = { "qwen-4b": 12, "lfm-8b": 32, qwen: 8, granite: 12, lfm: 0 };
+  const order = ["qwen-4b", "lfm-8b", "qwen", "granite", "lfm"];
   const row = (id: string) => models.data?.models.find(m => m.model.id === id);
   const tooSlow = (id: string) => (row(id)?.benchmark?.complete_ms ?? 0) > 12_000;
   const fits = (id: string) => gb(hw?.memory_bytes) >= (minMemory[id] ?? 8) && gb(hw?.free_disk_bytes) >= sizeGb(id) * 2 && !tooSlow(id);

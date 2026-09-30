@@ -435,6 +435,20 @@ For comparison, Google lists Gemma 4 E2B on a Galaxy S26 Ultra GPU at 3,808 read
 - **English-only characters:** for an English task, the question format allows only printable ASCII, which stopped small models drifting into other scripts. Other languages are unrestricted.
 - **Duplicates:** repeated questions are dropped.
 
+**Local coding head-to-head (2026-09-30, same laptop, Arbiter's own 3-task coding check through the real tool loop).**
+
+| Model | File | Old action format | One shape per action (0.1.6) | Questions avg | Notes |
+|---|---|---|---|---|---|
+| **Qwen3.5 4B** (Apache-2.0) | 2.74 GB | 1/3, 404 s | **3/3, 190 s** | 10.8 s | correct commit message; 2/2 on the edit benchmark |
+| Qwen3.5 9B | 5.68 GB | 0/3 (timeouts) | 2/3, 284 s | - | slower and not better; not in the catalog |
+| Qwen3.5 2B | 1.28 GB | 0/3 | 1/3 | 5–6 s | re-reads the same file until the breaker stops it |
+| LFM2.5 8B-A1B | 5.16 GB | 0/3 | 0/3 | 5.3 s | loops; questions only |
+
+- **Why the format mattered:** every action used to require `content`, `before_hash` and `summary`. So a `read` or `done` step made the model invent a file body and a hash, which is where the loops started. Each action now has only its own fields, a JSON `anyOf` that llguidance enforces.
+- **Loop guard:** the runtime stops a reply once the same block of 24 bytes or more repeats 4 times, and the agent retries that step up to twice with a short note.
+- **Tried and dropped:** answering an exact repeated read with the earlier result plus "take the next step" did not change any result.
+- **Recommendation order:** Qwen3.5 4B (12 GB or more of memory), then LFM2.5 8B-A1B, Qwen3.5 2B, Granite, LFM 1.2B. The coding check version is now 2, so old results show as out of date.
+
 **Order of work.**
 1. **Write less.** **Done:** the question writer now asks 1–2 questions as `{header, question}`, and the runtime adds the fixed fields. Granite went from 34.4 s to 6.8 s on the laptop above.
 2. **Stream the first question.** Show each question as soon as its JSON object closes, instead of after the whole reply.
@@ -444,7 +458,7 @@ For comparison, Google lists Gemma 4 E2B on a Galaxy S26 Ultra GPU at 3,808 read
 8. **Speculative decoding.** **Done (0.1.4):** prompt-lookup drafting in the embedded runtime.
    - **How it works:** when the last 3 tokens also appear earlier in the reply, or in a JSON-escaped copy of the prompt, up to 4 following tokens are checked in one batch.
    - **Rollback:** rejected tokens are removed. For hybrid models (Qwen3.5, LFM2), this uses llama.cpp's per-token recurrent snapshots (`n_rs_seq`). Other hybrid architectures (Granite 4) skip speculation.
-   - **Output:** unchanged, because greedy sampling gives the same result.
+   - **Output:** greedy sampling gives the same result. Single-step edits matched byte for byte with speculation on and off. Long multi-step runs can differ at rare near-ties, because batched arithmetic rounds differently; this is not systematic.
    - **Result on local coding steps that rewrite a small file:** Qwen3.5 2B went from 58 s to 35–37 s. Drafts of 8, 12 or adaptive lengths were slower on the CPU, because a batch costs nearly per token.
    - **Why the escaped copy matters:** code comes back escaped inside JSON strings. Looking drafts up in the raw prompt accepted only 30% of drafts.
    - **Tested and rejected:** a separate 0.8B draft model (2x slower). MTP heads worked in llama-server (1.6x on edits), but the embedded binding has no MTP support yet.

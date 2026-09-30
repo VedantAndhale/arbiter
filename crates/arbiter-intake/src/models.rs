@@ -52,7 +52,7 @@ pub const QUESTION_TARGET_MS: f64 = 12_000.0;
 /// Question models from best to simplest, from Arbiter's own comparison
 /// (docs/PLAN.md, "Local intelligence"). Speed only decides whether a model
 /// qualifies; among those that do, quality wins.
-const QUALITY: [&str; 4] = ["lfm-8b", "qwen", "granite", "lfm"];
+const QUALITY: [&str; 5] = ["qwen-4b", "lfm-8b", "qwen", "granite", "lfm"];
 fn quality_rank(id: &str) -> usize {
     QUALITY.iter().position(|q| *q == id).unwrap_or(QUALITY.len())
 }
